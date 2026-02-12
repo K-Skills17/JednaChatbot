@@ -3,9 +3,9 @@ builder = "NIXPACKS"
 buildCommand = "npm ci && npx prisma generate && npx tsc"
 
 [deploy]
-startCommand = "npx prisma db push --skip-generate && node dist/server.js"
+startCommand = "if [ -n \"$DATABASE_URL\" ]; then npx prisma db push --skip-generate; fi && node dist/server.js"
 healthcheckPath = "/health"
-healthcheckTimeout = 300
+healthcheckTimeout = 600
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
 

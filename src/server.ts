@@ -14,17 +14,20 @@ import { logger } from './utils/logger';
 async function main() {
   const app = await buildApp();
 
-  // Connect to database
-  await connectDatabase();
+  // Only connect DB and start workers when env is fully configured
+  if (env.DATABASE_URL) {
+    await connectDatabase();
 
-  // Start BullMQ workers
-  startMessageWorker();
-  startReminderWorker();
-  startCampaignWorker();
-  startCampaignScheduler();
-  startNotificationWorker();
+    startMessageWorker();
+    startReminderWorker();
+    startCampaignWorker();
+    startCampaignScheduler();
+    startNotificationWorker();
+  } else {
+    logger.warn('DATABASE_URL not set — running in health-check-only mode');
+  }
 
-  // Start the server
+  // Start the server (always — so health check responds)
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
   logger.info(`Server running on http://0.0.0.0:${env.PORT}`);
