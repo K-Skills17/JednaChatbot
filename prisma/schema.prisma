@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Multi-Tenant ────────────────────────────────────────────
+
+model Tenant {
+  id                  String   @id @default(uuid())
+  businessName        String   @map("business_name")
+  whatsappNumber      String   @map("whatsapp_number")
+  evolutionInstanceId String?  @map("evolution_instance_id")
+  timezone            String   @default("America/Sao_Paulo")
+  businessHours       Json     @map("business_hours")
+  aiConfig            Json     @map("ai_config")
+  bookingConfig       Json?    @map("booking_config")
+  notificationConfig  Json?    @map("notification_config")
+  status              String   @default("onboarding") // onboarding, active, suspended
+  plan                String   @default("starter")    // starter, pro, enterprise
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  contacts      Contact[]
+  conversations Conversation[]
+  messages      Message[]
+  bookings      Booking[]
+  campaigns     Campaign[]
+  notifications Notification[]
+
+  @@map("tenants")
+}
+
+// ─── Contacts / Leads ────────────────────────────────────────
+
+model Contact {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  phone             String
+  name              String?
+  email             String?
+  leadScore         Int       @default(0) @map("lead_score")
+  leadStatus        String    @default("new") @map("lead_status") // new, qualifying, qualified, booked, lost
+  qualificationData Json?     @map("qualification_data")
+  tags              String[]
+  firstContactAt    DateTime  @default(now()) @map("first_contact_at")
+  lastContactAt     DateTime? @map("last_contact_at")
+  optedOut          Boolean   @default(false) @map("opted_out")
+  optedOutAt        DateTime? @map("opted_out_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+  bookings      Booking[]
+  campaignContacts CampaignContact[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId, phone])
+  @@map("contacts")
+}
+
+// ─── Conversations ───────────────────────────────────────────
+
+model Conversation {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  contactId     String    @map("contact_id")
+  status        String    @default("active") // active, paused, closed, escalated
+  context       Json?     // AI conversation summary/context
+  startedAt     DateTime  @default(now()) @map("started_at")
+  lastMessageAt DateTime? @map("last_message_at")
+  closedAt      DateTime? @map("closed_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  contact  Contact   @relation(fields: [contactId], references: [id])
+  messages Message[]
+
+  @@index([tenantId, contactId])
+  @@map("conversations")
+}
+
+// ─── Messages ────────────────────────────────────────────────
+
+model Message {
+  id                 String   @id @default(uuid())
+  conversationId     String   @map("conversation_id")
+  tenantId           String   @map("tenant_id")
+  direction          String   // inbound, outbound
+  messageType        String   @map("message_type") // text, image, audio, document, interactive
+  content            String?
+  mediaUrl           String?  @map("media_url")
+  whatsappMessageId  String?  @map("whatsapp_message_id")
+  aiModelUsed        String?  @map("ai_model_used")
+  aiTokensUsed       Int?     @map("ai_tokens_used")
+  status             String   @default("sent") // sent, delivered, read, failed
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ─── Bookings ────────────────────────────────────────────────
+
+model Booking {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  contactId       String   @map("contact_id")
+  appointmentType String?  @map("appointment_type")
+  scheduledAt     DateTime @map("scheduled_at")
+  durationMinutes Int      @default(30) @map("duration_minutes")
+  status          String   @default("confirmed") // confirmed, cancelled, completed, no_show
+  calendarEventId String?  @map("calendar_event_id")
+  reminderSent    Boolean  @default(false) @map("reminder_sent")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([tenantId, scheduledAt])
+  @@map("bookings")
+}
+
+// ─── Campaigns (Cold Outreach) ───────────────────────────────
+
+model Campaign {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  name            String
+  status          String    @default("draft") // draft, active, paused, completed
+  messageTemplate String    @map("message_template")
+  targetCount     Int       @default(0) @map("target_count")
+  sentCount       Int       @default(0) @map("sent_count")
+  replyCount      Int       @default(0) @map("reply_count")
+  qualifiedCount  Int       @default(0) @map("qualified_count")
+  bookedCount     Int       @default(0) @map("booked_count")
+  sendRatePerDay  Int       @default(20) @map("send_rate_per_day")
+  scheduledStart  DateTime? @map("scheduled_start")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  contacts CampaignContact[]
+
+  @@index([tenantId, status])
+  @@map("campaigns")
+}
+
+model CampaignContact {
+  id         String    @id @default(uuid())
+  campaignId String    @map("campaign_id")
+  contactId  String    @map("contact_id")
+  status     String    @default("pending") // pending, sent, replied, opted_out, failed
+  sentAt     DateTime? @map("sent_at")
+  repliedAt  DateTime? @map("replied_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  contact  Contact  @relation(fields: [contactId], references: [id])
+
+  @@map("campaign_contacts")
+}
+
+// ─── Notifications ───────────────────────────────────────────
+
+model Notification {
+  id        String    @id @default(uuid())
+  tenantId  String    @map("tenant_id")
+  type      String    // new_lead, booking, escalation, daily_summary
+  channel   String    // whatsapp, email, webhook
+  recipient String
+  content   String?
+  status    String    @default("pending") // pending, sent, failed
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, type])
+  @@map("notifications")
+}
