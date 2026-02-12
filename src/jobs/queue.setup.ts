@@ -3,6 +3,8 @@ import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { messageProcessor } from './message.processor';
 import { reminderProcessor } from './reminder.processor';
+import { campaignProcessor } from './campaign.processor';
+import { campaignSchedulerProcessor } from './campaign.scheduler';
 
 const connection = { connection: redis };
 
@@ -16,6 +18,9 @@ export const campaignQueue = new Queue('campaign-sending', connection);
 
 /** Queue for sending booking reminders */
 export const reminderQueue = new Queue('booking-reminders', connection);
+
+/** Queue for campaign scheduler (repeatable tick) */
+export const campaignSchedulerQueue = new Queue('campaign-scheduler', connection);
 
 /** Queue for sending notifications to business owners */
 export const notificationQueue = new Queue('notifications', connection);
@@ -59,6 +64,55 @@ export function startReminderWorker(): void {
   });
 
   logger.info('Reminder worker started');
+}
+
+export function startCampaignWorker(): void {
+  const worker = new Worker(
+    'campaign-sending',
+    campaignProcessor,
+    {
+      ...connection,
+      concurrency: 3,
+    },
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Campaign send job completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Campaign send job failed');
+  });
+
+  logger.info('Campaign sending worker started');
+}
+
+export function startCampaignScheduler(): void {
+  campaignSchedulerQueue.add(
+    'campaign-scheduler-tick',
+    {},
+    {
+      repeat: { every: 5 * 60 * 1000 },
+      removeOnComplete: 10,
+      removeOnFail: 50,
+    },
+  );
+
+  const worker = new Worker(
+    'campaign-scheduler',
+    campaignSchedulerProcessor,
+    connection,
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Campaign scheduler tick completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Campaign scheduler tick failed');
+  });
+
+  logger.info('Campaign scheduler started (every 5 minutes)');
 }
 
 /** Placeholder notification worker */

@@ -99,6 +99,9 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     },
   });
 
+  // Track campaign replies (non-blocking)
+  await trackCampaignReply(tenant.id, contact.id);
+
   // Find or create active conversation
   let conversation = await prisma.conversation.findFirst({
     where: { tenantId: tenant.id, contactId: contact.id, status: 'active' },
@@ -189,6 +192,37 @@ function extractTextContent(data: MessageData): string | null {
     return data.message.listResponseMessage.singleSelectReply.selectedRowId;
 
   return null; // media without text
+}
+
+async function trackCampaignReply(tenantId: string, contactId: string): Promise<void> {
+  try {
+    const campaignContacts = await prisma.campaignContact.findMany({
+      where: {
+        contactId,
+        status: 'sent',
+        campaign: {
+          tenantId,
+          status: { in: ['active', 'completed'] },
+        },
+      },
+    });
+
+    for (const cc of campaignContacts) {
+      await prisma.campaignContact.update({
+        where: { id: cc.id },
+        data: { status: 'replied', repliedAt: new Date() },
+      });
+
+      await prisma.campaign.update({
+        where: { id: cc.campaignId },
+        data: { replyCount: { increment: 1 } },
+      });
+
+      logger.info({ campaignId: cc.campaignId, contactId }, 'Campaign reply tracked');
+    }
+  } catch (err) {
+    logger.error({ err, contactId }, 'Failed to track campaign reply');
+  }
 }
 
 function detectMessageType(data: MessageData): string {

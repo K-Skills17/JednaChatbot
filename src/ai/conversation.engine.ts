@@ -6,6 +6,7 @@ import { getProvider, getModelForTier } from './ai.router';
 import { buildSystemPrompt } from './prompts/system.prompt';
 import { buildQualificationPrompt } from './prompts/qualification.prompt';
 import { bookingService } from '../modules/booking/booking.service';
+import { campaignService } from '../modules/campaign/campaign.service';
 import {
   MessageJobData,
   AiMessage,
@@ -420,5 +421,31 @@ async function applySideEffects(
       where: { id: contactId },
       data: contactUpdate,
     });
+  }
+
+  // Track campaign funnel progression
+  if (action.leadStatus === 'qualified' || action.leadStatus === 'booked') {
+    await trackCampaignFunnel(contactId, action.leadStatus);
+  }
+}
+
+async function trackCampaignFunnel(
+  contactId: string,
+  newStatus: 'qualified' | 'booked',
+): Promise<void> {
+  try {
+    const campaignContacts = await prisma.campaignContact.findMany({
+      where: { contactId, status: 'replied' },
+    });
+
+    for (const cc of campaignContacts) {
+      if (newStatus === 'qualified') {
+        await campaignService.incrementQualifiedCount(cc.campaignId);
+      } else if (newStatus === 'booked') {
+        await campaignService.incrementBookedCount(cc.campaignId);
+      }
+    }
+  } catch (err) {
+    logger.error({ err, contactId, newStatus }, 'Failed to track campaign funnel');
   }
 }
