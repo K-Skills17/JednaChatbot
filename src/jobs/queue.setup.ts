@@ -1,6 +1,7 @@
 import { Queue, Worker, Job } from 'bullmq';
 import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
+import { messageProcessor } from './message.processor';
 
 const connection = { connection: redis };
 
@@ -18,24 +19,16 @@ export const reminderQueue = new Queue('booking-reminders', connection);
 /** Queue for sending notifications to business owners */
 export const notificationQueue = new Queue('notifications', connection);
 
-// ─── Workers (Phase 2 will add real processors) ──────────────
+// ─── Workers ─────────────────────────────────────────────────
 
-/** Placeholder message processor — echoes back for now */
 export function startMessageWorker(): void {
   const worker = new Worker(
     'message-processing',
-    async (job: Job) => {
-      const { tenantId, conversationId, phone, text, messageType, senderName } = job.data;
-
-      logger.info(
-        { tenantId, phone, text: text?.slice(0, 50) },
-        'Processing message (echo mode)',
-      );
-
-      // Phase 2: This is where AI conversation engine will be plugged in.
-      // For now, the message is stored and logged — no auto-reply yet.
+    messageProcessor,
+    {
+      ...connection,
+      concurrency: 5,
     },
-    connection,
   );
 
   worker.on('completed', (job) => {
@@ -46,7 +39,7 @@ export function startMessageWorker(): void {
     logger.error({ jobId: job?.id, err: err.message }, 'Message job failed');
   });
 
-  logger.info('Message processing worker started');
+  logger.info('Message processing worker started (AI engine)');
 }
 
 /** Placeholder notification worker */

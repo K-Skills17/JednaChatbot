@@ -1,0 +1,73 @@
+// ── Provider Interface ──────────────────────────────────────
+
+export interface AiProvider {
+  chat(request: AiChatRequest): Promise<AiChatResponse>;
+}
+
+export interface AiChatRequest {
+  systemPrompt: string;
+  messages: AiMessage[];
+  model: string;
+  temperature: number;
+  maxTokens?: number;
+}
+
+export interface AiMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiChatResponse {
+  text: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+// ── Model Tier ──────────────────────────────────────────────
+
+export type ModelTier = 'fast' | 'smart';
+
+// ── Conversation State ──────────────────────────────────────
+
+export type ConversationState =
+  | 'greeting'
+  | 'qualifying'
+  | 'qualified'
+  | 'booking'
+  | 'closed';
+
+// ── Conversation Context (stored in conversation.context JSON) ──
+
+export interface ConversationContext {
+  state: ConversationState;
+  extractedData: Record<string, any>;
+  qualificationComplete: boolean;
+  lastSummary?: string;
+  messageCount: number;
+}
+
+// ── AI Structured Response ──────────────────────────────────
+
+export interface AiAction {
+  replyText: string;
+  nextState?: ConversationState;
+  extractedData?: Record<string, any>;
+  leadScore?: number;
+  leadStatus?: 'new' | 'qualifying' | 'qualified' | 'booked' | 'lost';
+  shouldEscalate?: boolean;
+  qualificationReasoning?: string;
+}
+
+// ── Job Data (matches what webhook.handler.ts enqueues) ─────
+
+export interface MessageJobData {
+  tenantId: string;
+  contactId: string;
+  conversationId: string;
+  phone: string;
+  text: string | null;
+  messageType: string;
+  senderName: string | null;
+}
