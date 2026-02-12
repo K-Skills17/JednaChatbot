@@ -9,7 +9,7 @@ const envSchema = z.object({
   API_KEY: z.string().min(1).default('not-set'),
 
   DATABASE_URL: z.string().default(''),
-  REDIS_URL: z.string().default('redis://localhost:6379'),
+  REDIS_URL: z.string().default(''),
 
   EVOLUTION_API_URL: z.string().default(''),
   EVOLUTION_API_KEY: z.string().default(''),

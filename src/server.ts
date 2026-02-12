@@ -14,21 +14,25 @@ import { logger } from './utils/logger';
 async function main() {
   const app = await buildApp();
 
-  // Only connect DB and start workers when both DB and Redis are configured
-  if (env.DATABASE_URL && env.REDIS_URL) {
-    await connectDatabase();
+  // Start the server FIRST so health check responds immediately
+  await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
-    startMessageWorker();
-    startReminderWorker();
-    startCampaignWorker();
-    startCampaignScheduler();
-    startNotificationWorker();
+  // Then connect DB and start workers (non-fatal — server stays up)
+  if (env.DATABASE_URL && env.REDIS_URL) {
+    try {
+      await connectDatabase();
+
+      startMessageWorker();
+      startReminderWorker();
+      startCampaignWorker();
+      startCampaignScheduler();
+      startNotificationWorker();
+    } catch (err) {
+      logger.error({ err }, 'Failed to connect services — server running without workers');
+    }
   } else {
     logger.warn('DATABASE_URL or REDIS_URL not set — running in health-check-only mode');
   }
-
-  // Start the server (always — so health check responds)
-  await app.listen({ port: env.PORT, host: '0.0.0.0' });
 
   logger.info(`Server running on http://0.0.0.0:${env.PORT}`);
   logger.info(`Environment: ${env.NODE_ENV}`);
