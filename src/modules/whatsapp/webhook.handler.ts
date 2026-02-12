@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { fromWhatsAppJid } from '../../utils/phone.utils';
-import { messageQueue } from '../../jobs/queue.setup';
+import { getMessageQueue } from '../../jobs/queue.setup';
 import { webhookAuthMiddleware } from '../../middleware/webhook-auth';
 
 /**
@@ -139,7 +139,7 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
   });
 
   // Queue for AI processing (Phase 2 will implement the processor)
-  await messageQueue.add('process-message', {
+  await getMessageQueue().add('process-message', {
     tenantId: tenant.id,
     contactId: contact.id,
     conversationId: conversation.id,

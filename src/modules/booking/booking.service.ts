@@ -2,7 +2,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { formatDatePtBr } from '../../utils/timezone.utils';
 import { getCalendarClient, CalendarSlot } from './calendar.client';
-import { reminderQueue } from '../../jobs/queue.setup';
+import { getReminderQueue } from '../../jobs/queue.setup';
 import { notificationService } from '../notification/notification.service';
 
 interface CreateBookingInput {
@@ -220,7 +220,7 @@ export class BookingService {
     // 24h before
     const reminder24h = scheduledAt.getTime() - 24 * 60 * 60 * 1000;
     if (reminder24h > now) {
-      await reminderQueue.add(
+      await getReminderQueue().add(
         'booking-reminder',
         { bookingId, tenantId, contactId, type: '24h' },
         { delay: reminder24h - now },
@@ -230,7 +230,7 @@ export class BookingService {
     // 1h before
     const reminder1h = scheduledAt.getTime() - 60 * 60 * 1000;
     if (reminder1h > now) {
-      await reminderQueue.add(
+      await getReminderQueue().add(
         'booking-reminder',
         { bookingId, tenantId, contactId, type: '1h' },
         { delay: reminder1h - now },

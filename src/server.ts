@@ -14,8 +14,8 @@ import { logger } from './utils/logger';
 async function main() {
   const app = await buildApp();
 
-  // Only connect DB and start workers when env is fully configured
-  if (env.DATABASE_URL) {
+  // Only connect DB and start workers when both DB and Redis are configured
+  if (env.DATABASE_URL && env.REDIS_URL) {
     await connectDatabase();
 
     startMessageWorker();
@@ -24,7 +24,7 @@ async function main() {
     startCampaignScheduler();
     startNotificationWorker();
   } else {
-    logger.warn('DATABASE_URL not set — running in health-check-only mode');
+    logger.warn('DATABASE_URL or REDIS_URL not set — running in health-check-only mode');
   }
 
   // Start the server (always — so health check responds)

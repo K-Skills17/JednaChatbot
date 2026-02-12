@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
-import { campaignQueue } from './queue.setup';
+import { getCampaignQueue } from './queue.setup';
 import { isWithinBusinessHours } from '../utils/timezone.utils';
 import { CampaignSendJobData } from '../modules/campaign/campaign.types';
 
@@ -94,7 +94,7 @@ async function processCampaignBatch(campaign: any): Promise<void> {
     },
   }));
 
-  await campaignQueue.addBulk(jobs);
+  await getCampaignQueue().addBulk(jobs);
 
   logger.info(
     { campaignId: campaign.id, batchSize: pendingContacts.length },

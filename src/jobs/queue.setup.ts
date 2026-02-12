@@ -1,4 +1,4 @@
-import { Queue, Worker, Job } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { messageProcessor } from './message.processor';
@@ -7,24 +7,43 @@ import { campaignProcessor } from './campaign.processor';
 import { campaignSchedulerProcessor } from './campaign.scheduler';
 import { notificationProcessor } from './notification.processor';
 
-const connection = { connection: redis };
+function getConnection() {
+  return { connection: redis };
+}
 
-// ─── Queues ──────────────────────────────────────────────────
+// ─── Lazy Queue Getters ─────────────────────────────────────
+// Queues are created on first call, not at import time, so the
+// module can be imported even when REDIS_URL is not configured.
 
-/** Queue for processing incoming WhatsApp messages */
-export const messageQueue = new Queue('message-processing', connection);
+let _messageQueue: Queue | null = null;
+export function getMessageQueue(): Queue {
+  if (!_messageQueue) _messageQueue = new Queue('message-processing', getConnection());
+  return _messageQueue;
+}
 
-/** Queue for sending outbound campaign messages */
-export const campaignQueue = new Queue('campaign-sending', connection);
+let _campaignQueue: Queue | null = null;
+export function getCampaignQueue(): Queue {
+  if (!_campaignQueue) _campaignQueue = new Queue('campaign-sending', getConnection());
+  return _campaignQueue;
+}
 
-/** Queue for sending booking reminders */
-export const reminderQueue = new Queue('booking-reminders', connection);
+let _reminderQueue: Queue | null = null;
+export function getReminderQueue(): Queue {
+  if (!_reminderQueue) _reminderQueue = new Queue('booking-reminders', getConnection());
+  return _reminderQueue;
+}
 
-/** Queue for campaign scheduler (repeatable tick) */
-export const campaignSchedulerQueue = new Queue('campaign-scheduler', connection);
+let _campaignSchedulerQueue: Queue | null = null;
+function getCampaignSchedulerQueue(): Queue {
+  if (!_campaignSchedulerQueue) _campaignSchedulerQueue = new Queue('campaign-scheduler', getConnection());
+  return _campaignSchedulerQueue;
+}
 
-/** Queue for sending notifications to business owners */
-export const notificationQueue = new Queue('notifications', connection);
+let _notificationQueue: Queue | null = null;
+export function getNotificationQueue(): Queue {
+  if (!_notificationQueue) _notificationQueue = new Queue('notifications', getConnection());
+  return _notificationQueue;
+}
 
 // ─── Workers ─────────────────────────────────────────────────
 
@@ -33,7 +52,7 @@ export function startMessageWorker(): void {
     'message-processing',
     messageProcessor,
     {
-      ...connection,
+      ...getConnection(),
       concurrency: 5,
     },
   );
@@ -53,7 +72,7 @@ export function startReminderWorker(): void {
   const worker = new Worker(
     'booking-reminders',
     reminderProcessor,
-    connection,
+    getConnection(),
   );
 
   worker.on('completed', (job) => {
@@ -72,7 +91,7 @@ export function startCampaignWorker(): void {
     'campaign-sending',
     campaignProcessor,
     {
-      ...connection,
+      ...getConnection(),
       concurrency: 3,
     },
   );
@@ -89,7 +108,7 @@ export function startCampaignWorker(): void {
 }
 
 export function startCampaignScheduler(): void {
-  campaignSchedulerQueue.add(
+  getCampaignSchedulerQueue().add(
     'campaign-scheduler-tick',
     {},
     {
@@ -102,7 +121,7 @@ export function startCampaignScheduler(): void {
   const worker = new Worker(
     'campaign-scheduler',
     campaignSchedulerProcessor,
-    connection,
+    getConnection(),
   );
 
   worker.on('completed', (job) => {
@@ -121,7 +140,7 @@ export function startNotificationWorker(): void {
     'notifications',
     notificationProcessor,
     {
-      ...connection,
+      ...getConnection(),
       concurrency: 3,
     },
   );

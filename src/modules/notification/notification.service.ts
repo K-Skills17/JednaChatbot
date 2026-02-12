@@ -1,6 +1,6 @@
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
-import { notificationQueue } from '../../jobs/queue.setup';
+import { getNotificationQueue } from '../../jobs/queue.setup';
 
 export type NotificationType = 'new_lead' | 'booking' | 'escalation' | 'daily_summary';
 export type NotificationChannel = 'whatsapp' | 'email' | 'webhook';
@@ -27,7 +27,7 @@ export class NotificationService {
       },
     });
 
-    await notificationQueue.add('send-notification', {
+    await getNotificationQueue().add('send-notification', {
       notificationId: notification.id,
       tenantId: input.tenantId,
       type: input.type,

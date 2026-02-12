@@ -8,6 +8,7 @@ import { registerBookingRoutes } from './modules/booking/booking.routes';
 import { registerCampaignRoutes } from './modules/campaign/campaign.routes';
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
+import { env } from './config/env';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
 
@@ -40,25 +41,33 @@ export async function buildApp() {
   }));
 
   app.get('/health/ready', async (_request, reply) => {
-    const checks: Record<string, 'ok' | 'error'> = {};
+    const checks: Record<string, 'ok' | 'error' | 'skipped'> = {};
 
     // Database check
-    try {
-      await prisma.$queryRawUnsafe('SELECT 1');
-      checks.database = 'ok';
-    } catch {
-      checks.database = 'error';
+    if (env.DATABASE_URL) {
+      try {
+        await prisma.$queryRawUnsafe('SELECT 1');
+        checks.database = 'ok';
+      } catch {
+        checks.database = 'error';
+      }
+    } else {
+      checks.database = 'skipped';
     }
 
     // Redis check
-    try {
-      await redis.ping();
-      checks.redis = 'ok';
-    } catch {
-      checks.redis = 'error';
+    if (env.REDIS_URL && env.REDIS_URL !== 'redis://localhost:6379') {
+      try {
+        await redis.ping();
+        checks.redis = 'ok';
+      } catch {
+        checks.redis = 'error';
+      }
+    } else {
+      checks.redis = 'skipped';
     }
 
-    const allOk = Object.values(checks).every((v) => v === 'ok');
+    const allOk = Object.values(checks).every((v) => v === 'ok' || v === 'skipped');
     const status = allOk ? 'ready' : 'degraded';
 
     return reply.code(allOk ? 200 : 503).send({ status, checks });
