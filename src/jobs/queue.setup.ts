@@ -5,6 +5,7 @@ import { messageProcessor } from './message.processor';
 import { reminderProcessor } from './reminder.processor';
 import { campaignProcessor } from './campaign.processor';
 import { campaignSchedulerProcessor } from './campaign.scheduler';
+import { notificationProcessor } from './notification.processor';
 
 const connection = { connection: redis };
 
@@ -115,15 +116,23 @@ export function startCampaignScheduler(): void {
   logger.info('Campaign scheduler started (every 5 minutes)');
 }
 
-/** Placeholder notification worker */
 export function startNotificationWorker(): void {
   const worker = new Worker(
     'notifications',
-    async (job: Job) => {
-      logger.info({ type: job.data.type }, 'Notification job (placeholder)');
+    notificationProcessor,
+    {
+      ...connection,
+      concurrency: 3,
     },
-    connection,
   );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Notification job completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Notification job failed');
+  });
 
   logger.info('Notification worker started');
 }

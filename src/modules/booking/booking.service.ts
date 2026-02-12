@@ -3,6 +3,7 @@ import { logger } from '../../utils/logger';
 import { formatDatePtBr } from '../../utils/timezone.utils';
 import { getCalendarClient, CalendarSlot } from './calendar.client';
 import { reminderQueue } from '../../jobs/queue.setup';
+import { notificationService } from '../notification/notification.service';
 
 interface CreateBookingInput {
   tenantId: string;
@@ -81,6 +82,13 @@ export class BookingService {
       where: { id: input.contactId },
       data: { leadStatus: 'booked' },
     });
+
+    // Notify business owner
+    await notificationService.notifyBooking(
+      input.tenantId,
+      contact.name ?? contact.phone,
+      input.scheduledAt,
+    ).catch((err) => logger.error({ err }, 'Failed to send booking notification'));
 
     logger.info(
       { bookingId: booking.id, scheduledAt: input.scheduledAt },

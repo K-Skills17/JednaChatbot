@@ -7,6 +7,7 @@ import { buildSystemPrompt } from './prompts/system.prompt';
 import { buildQualificationPrompt } from './prompts/qualification.prompt';
 import { bookingService } from '../modules/booking/booking.service';
 import { campaignService } from '../modules/campaign/campaign.service';
+import { notificationService } from '../modules/notification/notification.service';
 import {
   MessageJobData,
   AiMessage,
@@ -163,7 +164,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   await updateLastOutboundMessage(conversationId, model, aiResponse.totalTokens);
 
   // 16. Apply side effects
-  await applySideEffects(conversationId, contactId, context, action);
+  await applySideEffects(tenantId, conversationId, contactId, phone, context, action);
 
   logger.info(
     { phone, model, tokens: aiResponse.totalTokens, state: action.nextState ?? context.state },
@@ -350,8 +351,10 @@ async function updateLastOutboundMessage(
 }
 
 async function applySideEffects(
+  tenantId: string,
   conversationId: string,
   contactId: string,
+  phone: string,
   currentContext: ConversationContext,
   action: AiAction,
 ): Promise<void> {
@@ -426,6 +429,21 @@ async function applySideEffects(
   // Track campaign funnel progression
   if (action.leadStatus === 'qualified' || action.leadStatus === 'booked') {
     await trackCampaignFunnel(contactId, action.leadStatus);
+  }
+
+  // Send notifications (non-blocking)
+  try {
+    const contactName = action.extractedData?.nome ?? '';
+
+    if (action.shouldEscalate) {
+      await notificationService.notifyEscalation(tenantId, contactName, phone);
+    }
+
+    if (action.leadStatus === 'qualified' && currentContext.messageCount <= 2) {
+      await notificationService.notifyNewLead(tenantId, contactName, phone);
+    }
+  } catch (err) {
+    logger.error({ err }, 'Failed to send notification');
   }
 }
 

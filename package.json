@@ -13,7 +13,9 @@
     "db:studio": "prisma studio",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "repository": {
     "type": "git",
@@ -34,6 +36,7 @@
     "dotenv": "^17.2.4",
     "fastify": "^5.7.4",
     "googleapis": "^171.4.0",
+    "nodemailer": "^8.0.1",
     "openai": "^6.21.0",
     "pg": "^8.18.0",
     "pino": "^10.3.1",
@@ -43,12 +46,14 @@
   },
   "devDependencies": {
     "@types/node": "^25.2.3",
+    "@types/nodemailer": "^7.0.9",
     "@types/pg": "^8.16.0",
     "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.11",
     "prisma": "^7.4.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

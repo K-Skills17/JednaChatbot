@@ -6,7 +6,10 @@ import { logger } from './utils/logger';
 import { registerTenantRoutes } from './modules/tenant/tenant.routes';
 import { registerBookingRoutes } from './modules/booking/booking.routes';
 import { registerCampaignRoutes } from './modules/campaign/campaign.routes';
+import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
+import { prisma } from './config/database';
+import { redis } from './config/redis';
 
 export async function buildApp() {
   const app = Fastify({
@@ -36,9 +39,29 @@ export async function buildApp() {
     uptime: process.uptime(),
   }));
 
-  app.get('/health/ready', async () => {
-    // Phase 2: check DB + Redis + Evolution connectivity
-    return { status: 'ready' };
+  app.get('/health/ready', async (_request, reply) => {
+    const checks: Record<string, 'ok' | 'error'> = {};
+
+    // Database check
+    try {
+      await prisma.$queryRawUnsafe('SELECT 1');
+      checks.database = 'ok';
+    } catch {
+      checks.database = 'error';
+    }
+
+    // Redis check
+    try {
+      await redis.ping();
+      checks.redis = 'ok';
+    } catch {
+      checks.redis = 'error';
+    }
+
+    const allOk = Object.values(checks).every((v) => v === 'ok');
+    const status = allOk ? 'ready' : 'degraded';
+
+    return reply.code(allOk ? 200 : 503).send({ status, checks });
   });
 
   // ─── Routes ───────────────────────────────────────────────
@@ -47,6 +70,7 @@ export async function buildApp() {
   registerTenantRoutes(app);
   registerBookingRoutes(app);
   registerCampaignRoutes(app);
+  registerAnalyticsRoutes(app);
 
   // ─── Error Handler ────────────────────────────────────────
 

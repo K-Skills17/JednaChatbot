@@ -3,6 +3,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { fromWhatsAppJid } from '../../utils/phone.utils';
 import { messageQueue } from '../../jobs/queue.setup';
+import { webhookAuthMiddleware } from '../../middleware/webhook-auth';
 
 /**
  * Evolution API webhook payload types.
@@ -35,6 +36,8 @@ interface MessageData {
 }
 
 export function registerWebhookRoutes(app: FastifyInstance): void {
+  app.addHook('preHandler', webhookAuthMiddleware);
+
   app.post(
     '/webhook/evolution',
     async (request: FastifyRequest<{ Body: EvolutionWebhookPayload }>, reply: FastifyReply) => {
