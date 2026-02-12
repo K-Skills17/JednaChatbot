@@ -58,6 +58,8 @@ export interface AiAction {
   leadStatus?: 'new' | 'qualifying' | 'qualified' | 'booked' | 'lost';
   shouldEscalate?: boolean;
   qualificationReasoning?: string;
+  bookingDate?: string; // ISO date string when AI confirms a booking
+  bookingTime?: string; // HH:mm when AI confirms a booking
 }
 
 // ── Job Data (matches what webhook.handler.ts enqueues) ─────

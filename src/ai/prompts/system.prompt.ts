@@ -155,7 +155,9 @@ Responda SEMPRE com um bloco JSON válido no seguinte formato:
   "leadScore": null,
   "leadStatus": null,
   "shouldEscalate": false,
-  "qualificationReasoning": null
+  "qualificationReasoning": null,
+  "bookingDate": null,
+  "bookingTime": null
 }
 \`\`\`
 
@@ -167,6 +169,10 @@ Regras do JSON:
 - "leadStatus": "qualifying", "qualified", ou "lost" se quer mudar. Null para manter.
 - "shouldEscalate": true se o contato pedir para falar com humano ou se a situação exigir intervenção humana.
 - "qualificationReasoning": string explicando o motivo da qualificação/desqualificação, só quando mudar leadStatus.
+- "bookingDate": data do agendamento confirmado no formato "YYYY-MM-DD". Null se não há agendamento.
+- "bookingTime": horário do agendamento confirmado no formato "HH:mm". Null se não há agendamento.
+
+Quando o contato confirmar um agendamento, preencha bookingDate e bookingTime E mude nextState para "closed".
 
 IMPORTANTE: Responda APENAS com o bloco JSON, sem texto antes ou depois.`;
 

@@ -2,7 +2,7 @@ import { buildApp } from './app';
 import { env } from './config/env';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { disconnectRedis } from './config/redis';
-import { startMessageWorker, startNotificationWorker } from './jobs/queue.setup';
+import { startMessageWorker, startReminderWorker, startNotificationWorker } from './jobs/queue.setup';
 import { logger } from './utils/logger';
 
 async function main() {
@@ -13,6 +13,7 @@ async function main() {
 
   // Start BullMQ workers
   startMessageWorker();
+  startReminderWorker();
   startNotificationWorker();
 
   // Start the server

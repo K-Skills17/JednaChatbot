@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { logger } from './utils/logger';
 import { registerTenantRoutes } from './modules/tenant/tenant.routes';
+import { registerBookingRoutes } from './modules/booking/booking.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
 
 export async function buildApp() {
@@ -43,6 +44,7 @@ export async function buildApp() {
 
   registerWebhookRoutes(app);
   registerTenantRoutes(app);
+  registerBookingRoutes(app);
 
   // ─── Error Handler ────────────────────────────────────────
 

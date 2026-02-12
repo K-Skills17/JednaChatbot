@@ -5,6 +5,7 @@ import { sendMessage } from '../modules/whatsapp/message.sender';
 import { getProvider, getModelForTier } from './ai.router';
 import { buildSystemPrompt } from './prompts/system.prompt';
 import { buildQualificationPrompt } from './prompts/qualification.prompt';
+import { bookingService } from '../modules/booking/booking.service';
 import {
   MessageJobData,
   AiMessage,
@@ -129,7 +130,26 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     }
   }
 
-  // 13. Send reply via WhatsApp
+  // 13. Create booking if AI confirmed a date/time
+  if (action.bookingDate && action.bookingTime && action.nextState === 'closed') {
+    try {
+      const scheduledAt = parseBookingDateTime(action.bookingDate, action.bookingTime);
+      if (scheduledAt) {
+        await bookingService.create({
+          tenantId,
+          contactId,
+          scheduledAt,
+          appointmentType: context.extractedData?.appointmentType ?? undefined,
+          notes: `Agendado via chatbot. ${context.extractedData?.notes ?? ''}`.trim(),
+        });
+        action.leadStatus = 'booked';
+      }
+    } catch (err) {
+      logger.error({ err }, 'Failed to create booking from AI action');
+    }
+  }
+
+  // 14. Send reply via WhatsApp
   await sendMessage({
     tenantId,
     conversationId,
@@ -138,10 +158,10 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     text: action.replyText,
   });
 
-  // 14. Update the outbound message with AI metadata
+  // 15. Update the outbound message with AI metadata
   await updateLastOutboundMessage(conversationId, model, aiResponse.totalTokens);
 
-  // 15. Apply side effects
+  // 16. Apply side effects
   await applySideEffects(conversationId, contactId, context, action);
 
   logger.info(
@@ -248,7 +268,22 @@ function parseActionJson(jsonStr: string, rawText: string): AiAction {
     leadStatus: parsed.leadStatus ?? undefined,
     shouldEscalate: parsed.shouldEscalate ?? false,
     qualificationReasoning: parsed.qualificationReasoning ?? undefined,
+    bookingDate: parsed.bookingDate ?? undefined,
+    bookingTime: parsed.bookingTime ?? undefined,
   };
+}
+
+function parseBookingDateTime(dateStr: string, timeStr: string): Date | null {
+  try {
+    // Support formats like "2026-02-15" + "14:30"
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const date = new Date(year, month - 1, day, hours, minutes);
+    if (isNaN(date.getTime())) return null;
+    return date;
+  } catch {
+    return null;
+  }
 }
 
 async function runQualificationEvaluation(

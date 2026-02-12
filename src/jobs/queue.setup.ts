@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq';
 import { redis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { messageProcessor } from './message.processor';
+import { reminderProcessor } from './reminder.processor';
 
 const connection = { connection: redis };
 
@@ -40,6 +41,24 @@ export function startMessageWorker(): void {
   });
 
   logger.info('Message processing worker started (AI engine)');
+}
+
+export function startReminderWorker(): void {
+  const worker = new Worker(
+    'booking-reminders',
+    reminderProcessor,
+    connection,
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Reminder job completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Reminder job failed');
+  });
+
+  logger.info('Reminder worker started');
 }
 
 /** Placeholder notification worker */

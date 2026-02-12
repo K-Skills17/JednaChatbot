@@ -20,6 +20,10 @@ const envSchema = z.object({
   AI_PRIMARY_MODEL: z.string().default('claude-haiku-4-5-20251001'),
   AI_QUALIFICATION_MODEL: z.string().default('claude-sonnet-4-5-20250929'),
 
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().optional(),
+
   WEBHOOK_BASE_URL: z.string().url().default('http://localhost:3000'),
 });
 
