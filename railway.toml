@@ -1,9 +1,9 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npx prisma generate && npx tsc"
+buildCommand = "npm ci && npx prisma generate && npx tsc && (npx prisma db push --skip-generate || true)"
 
 [deploy]
-startCommand = "sh -c 'npx prisma db push --skip-generate || true; node dist/server.js'"
+startCommand = "node dist/server.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 600
 restartPolicyType = "ON_FAILURE"
