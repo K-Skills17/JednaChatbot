@@ -73,13 +73,13 @@ export async function buildApp() {
     return reply.code(allOk ? 200 : 503).send({ status, checks });
   });
 
-  // ─── Routes ───────────────────────────────────────────────
+  // ─── Routes (each wrapped in register() for hook encapsulation) ───
 
-  registerWebhookRoutes(app);
-  registerTenantRoutes(app);
-  registerBookingRoutes(app);
-  registerCampaignRoutes(app);
-  registerAnalyticsRoutes(app);
+  app.register(async (instance) => registerWebhookRoutes(instance));
+  app.register(async (instance) => registerTenantRoutes(instance));
+  app.register(async (instance) => registerBookingRoutes(instance));
+  app.register(async (instance) => registerCampaignRoutes(instance));
+  app.register(async (instance) => registerAnalyticsRoutes(instance));
 
   // ─── Error Handler ────────────────────────────────────────
 
