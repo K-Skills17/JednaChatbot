@@ -24,6 +24,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
     "@fastify/cors": "^11.2.0",
