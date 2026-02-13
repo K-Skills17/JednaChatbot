@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npx prisma generate && npx tsc && (npx prisma db push --skip-generate || true)"
+buildCommand = "npx prisma generate && npx tsc && (npx prisma db push --skip-generate || true)"
 
 [deploy]
 startCommand = "node dist/server.js"
