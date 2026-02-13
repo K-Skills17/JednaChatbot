@@ -65,6 +65,10 @@ export function startMessageWorker(): void {
     logger.error({ jobId: job?.id, err: err.message }, 'Message job failed');
   });
 
+  worker.on('error', (err) => {
+    logger.error({ err: err.message }, 'Message worker error');
+  });
+
   logger.info('Message processing worker started (AI engine)');
 }
 
@@ -81,6 +85,10 @@ export function startReminderWorker(): void {
 
   worker.on('failed', (job, err) => {
     logger.error({ jobId: job?.id, err: err.message }, 'Reminder job failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err: err.message }, 'Reminder worker error');
   });
 
   logger.info('Reminder worker started');
@@ -104,11 +112,15 @@ export function startCampaignWorker(): void {
     logger.error({ jobId: job?.id, err: err.message }, 'Campaign send job failed');
   });
 
+  worker.on('error', (err) => {
+    logger.error({ err: err.message }, 'Campaign worker error');
+  });
+
   logger.info('Campaign sending worker started');
 }
 
-export function startCampaignScheduler(): void {
-  getCampaignSchedulerQueue().add(
+export async function startCampaignScheduler(): Promise<void> {
+  await getCampaignSchedulerQueue().add(
     'campaign-scheduler-tick',
     {},
     {
@@ -132,6 +144,10 @@ export function startCampaignScheduler(): void {
     logger.error({ jobId: job?.id, err: err.message }, 'Campaign scheduler tick failed');
   });
 
+  worker.on('error', (err) => {
+    logger.error({ err: err.message }, 'Campaign scheduler worker error');
+  });
+
   logger.info('Campaign scheduler started (every 5 minutes)');
 }
 
@@ -151,6 +167,10 @@ export function startNotificationWorker(): void {
 
   worker.on('failed', (job, err) => {
     logger.error({ jobId: job?.id, err: err.message }, 'Notification job failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err: err.message }, 'Notification worker error');
   });
 
   logger.info('Notification worker started');

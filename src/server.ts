@@ -12,6 +12,15 @@ import {
 import { logger } from './utils/logger';
 
 async function main() {
+  // Prevent unhandled errors from crashing the process
+  process.on('unhandledRejection', (reason) => {
+    logger.error({ err: reason }, 'Unhandled promise rejection');
+  });
+
+  process.on('uncaughtException', (err) => {
+    logger.fatal({ err }, 'Uncaught exception');
+  });
+
   const app = await buildApp();
 
   // Start the server FIRST so health check responds immediately
@@ -25,7 +34,7 @@ async function main() {
       startMessageWorker();
       startReminderWorker();
       startCampaignWorker();
-      startCampaignScheduler();
+      await startCampaignScheduler();
       startNotificationWorker();
     } catch (err) {
       logger.error({ err }, 'Failed to connect services — server running without workers');
