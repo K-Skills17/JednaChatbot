@@ -82,4 +82,13 @@ export function registerTenantRoutes(app: FastifyInstance): void {
       return reply.send(status);
     },
   );
+
+  // (Re)configure webhook for a tenant's Evolution instance
+  app.post(
+    '/api/tenants/:tenantId/webhook',
+    async (request: FastifyRequest<{ Params: { tenantId: string } }>, reply: FastifyReply) => {
+      const result = await tenantService.setupWebhook(request.params.tenantId);
+      return reply.send(result);
+    },
+  );
 }
