@@ -9,6 +9,6 @@ export async function authMiddleware(
   const apiKey = request.headers['x-api-key'];
 
   if (!apiKey || apiKey !== env.API_KEY) {
-    reply.code(401).send({ error: 'Unauthorized', message: 'Invalid or missing API key' });
+    return reply.code(401).send({ error: 'Unauthorized', message: 'Invalid or missing API key' });
   }
 }

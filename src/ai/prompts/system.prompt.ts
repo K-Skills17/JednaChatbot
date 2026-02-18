@@ -1,5 +1,16 @@
 import { ConversationState, ConversationContext } from '../ai.types';
 
+interface ServiceInfo {
+  name: string;
+  description?: string;
+  price?: string;
+}
+
+interface FaqEntry {
+  question: string;
+  answer: string;
+}
+
 interface TenantData {
   businessName: string;
   timezone: string;
@@ -7,6 +18,16 @@ interface TenantData {
   aiConfig: {
     systemPrompt?: string;
     qualificationCriteria: any[];
+    // Business context for training
+    businessDescription?: string;
+    services?: ServiceInfo[];
+    faq?: FaqEntry[];
+    targetAudience?: string;
+    tone?: 'formal' | 'casual' | 'friendly';
+    greeting?: string;
+    closingMessage?: string;
+    escalationRules?: string;
+    forbiddenTopics?: string[];
   };
 }
 
@@ -26,26 +47,45 @@ export function buildSystemPrompt(
 ): string {
   const parts: string[] = [];
 
-  parts.push(buildIdentity(tenant.businessName));
+  parts.push(buildIdentity(tenant.businessName, tenant.aiConfig.tone));
 
+  // Custom business instructions (free-form prompt from the business owner)
   if (tenant.aiConfig.systemPrompt) {
     parts.push(`## Instruções Específicas do Negócio\n${tenant.aiConfig.systemPrompt}`);
   }
 
   parts.push(buildBusinessContext(tenant));
+
+  // Business knowledge base — THIS IS THE KEY ANTI-HALLUCINATION SECTION
+  const knowledgeBase = buildKnowledgeBase(tenant.aiConfig);
+  if (knowledgeBase) {
+    parts.push(knowledgeBase);
+  }
+
   parts.push(buildContactContext(contact, context));
-  parts.push(buildStateInstructions(context.state, tenant.aiConfig.qualificationCriteria));
+  parts.push(buildStateInstructions(
+    context.state,
+    tenant.aiConfig.qualificationCriteria,
+    tenant.aiConfig.greeting,
+  ));
   parts.push(RESPONSE_FORMAT);
-  parts.push(BEHAVIORAL_RULES);
+  parts.push(buildBehavioralRules(tenant.aiConfig));
 
   return parts.join('\n\n');
 }
 
 // ── Template Pieces ─────────────────────────────────────────
 
-function buildIdentity(businessName: string): string {
+function buildIdentity(businessName: string, tone?: string): string {
+  const toneMap: Record<string, string> = {
+    formal: 'profissional e respeitosa, usando linguagem formal',
+    casual: 'descontraída e leve, como um amigo ajudando',
+    friendly: 'natural, amigável e profissional',
+  };
+  const toneDesc = toneMap[tone ?? 'friendly'] ?? toneMap.friendly;
+
   return `# Identidade
-Você é o assistente virtual da ${businessName}. Você conversa em português brasileiro de forma natural, amigável e profissional.
+Você é o assistente virtual da ${businessName}. Você conversa em português brasileiro de forma ${toneDesc}.
 Seu objetivo é entender a necessidade do contato, qualificar como potencial cliente e, se qualificado, direcionar para agendamento.
 Nunca revele que é uma inteligência artificial a menos que perguntado diretamente.
 Use "você" (não "tu"). Mantenha as mensagens curtas e adequadas para WhatsApp (máximo 3-4 frases por mensagem).`;
@@ -55,10 +95,60 @@ function buildBusinessContext(tenant: TenantData): string {
   const dayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const workDays = tenant.businessHours.days.map((d) => dayNames[d]).join(', ');
 
-  return `## Contexto do Negócio
-- Empresa: ${tenant.businessName}
-- Horário de funcionamento: ${tenant.businessHours.start} às ${tenant.businessHours.end} (${workDays})
-- Fuso horário: ${tenant.timezone}`;
+  const lines = [
+    '## Contexto do Negócio',
+    `- Empresa: ${tenant.businessName}`,
+    `- Horário de funcionamento: ${tenant.businessHours.start} às ${tenant.businessHours.end} (${workDays})`,
+    `- Fuso horário: ${tenant.timezone}`,
+  ];
+
+  if (tenant.aiConfig.businessDescription) {
+    lines.push(`- Descrição: ${tenant.aiConfig.businessDescription}`);
+  }
+  if (tenant.aiConfig.targetAudience) {
+    lines.push(`- Público-alvo: ${tenant.aiConfig.targetAudience}`);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Build the business knowledge base section.
+ * This is the CORE of preventing hallucination:
+ * The AI can ONLY answer about what's listed here.
+ */
+function buildKnowledgeBase(aiConfig: TenantData['aiConfig']): string | null {
+  const sections: string[] = [];
+
+  // Services / Products
+  if (aiConfig.services && aiConfig.services.length > 0) {
+    const serviceLines = ['### Serviços / Produtos Oferecidos'];
+    for (const svc of aiConfig.services) {
+      let line = `- **${svc.name}**`;
+      if (svc.description) line += `: ${svc.description}`;
+      if (svc.price) line += ` (${svc.price})`;
+      serviceLines.push(line);
+    }
+    serviceLines.push('');
+    serviceLines.push('IMPORTANTE: APENAS informe sobre os serviços listados acima. Se o contato perguntar sobre um serviço não listado, diga que vai verificar com a equipe.');
+    sections.push(serviceLines.join('\n'));
+  }
+
+  // FAQ
+  if (aiConfig.faq && aiConfig.faq.length > 0) {
+    const faqLines = ['### Perguntas Frequentes (FAQ)'];
+    for (const item of aiConfig.faq) {
+      faqLines.push(`**P:** ${item.question}`);
+      faqLines.push(`**R:** ${item.answer}`);
+      faqLines.push('');
+    }
+    faqLines.push('Use estas respostas como base quando o contato fizer perguntas similares. Adapte a linguagem para soar natural, mas mantenha a informação precisa.');
+    sections.push(faqLines.join('\n'));
+  }
+
+  if (sections.length === 0) return null;
+
+  return `## Base de Conhecimento do Negócio\nUse EXCLUSIVAMENTE as informações abaixo para responder perguntas sobre o negócio. NUNCA invente informações que não estão aqui.\n\n${sections.join('\n\n')}`;
 }
 
 function buildContactContext(contact: ContactData, context: ConversationContext): string {
@@ -70,6 +160,7 @@ function buildContactContext(contact: ContactData, context: ConversationContext)
   if (context.extractedData && Object.keys(context.extractedData).length > 0) {
     lines.push('- Dados já coletados:');
     for (const [key, value] of Object.entries(context.extractedData)) {
+      if (key.startsWith('_')) continue; // skip internal fields like _reasoning
       lines.push(`  - ${key}: ${value}`);
     }
   }
@@ -84,13 +175,11 @@ function buildContactContext(contact: ContactData, context: ConversationContext)
 function buildStateInstructions(
   state: ConversationState,
   qualificationCriteria: any[],
+  customGreeting?: string,
 ): string {
   switch (state) {
     case 'greeting':
-      return `## Fase Atual: Saudação
-Cumprimente o contato de forma calorosa. Pergunte o nome se ainda não sabe.
-Pergunte como pode ajudar. Seja breve e acolhedor.
-Após a primeira troca, mude o estado para "qualifying".`;
+      return buildGreetingInstructions(customGreeting);
 
     case 'qualifying':
       return buildQualifyingInstructions(qualificationCriteria);
@@ -112,6 +201,20 @@ Confirme data e horário escolhidos. Mude o estado para "closed" quando o agenda
 A conversa principal foi concluída. Responda a perguntas adicionais de forma breve.
 Se o contato quiser agendar novamente ou tiver nova demanda, mude o estado para "qualifying".`;
   }
+}
+
+function buildGreetingInstructions(customGreeting?: string): string {
+  if (customGreeting) {
+    return `## Fase Atual: Saudação
+Use esta saudação como base (adapte se necessário): "${customGreeting}"
+Pergunte o nome se ainda não sabe. Seja breve e acolhedor.
+Após a primeira troca, mude o estado para "qualifying".`;
+  }
+
+  return `## Fase Atual: Saudação
+Cumprimente o contato de forma calorosa. Pergunte o nome se ainda não sabe.
+Pergunte como pode ajudar. Seja breve e acolhedor.
+Após a primeira troca, mude o estado para "qualifying".`;
 }
 
 function buildQualifyingInstructions(criteria: any[]): string {
@@ -176,11 +279,32 @@ Quando o contato confirmar um agendamento, preencha bookingDate e bookingTime E 
 
 IMPORTANTE: Responda APENAS com o bloco JSON, sem texto antes ou depois.`;
 
-const BEHAVIORAL_RULES = `## Regras de Comportamento
-- NUNCA invente informações sobre preços, serviços ou políticas que não foram fornecidas no contexto.
-- Se não souber algo, diga que vai verificar com a equipe.
-- Se o contato pedir para parar, diga: "Entendido! Se precisar de algo no futuro, é só mandar mensagem. Até mais! 👋" e mude o estado para "closed".
-- Se receber mensagem de áudio/imagem sem texto, diga: "Recebi sua mensagem! Infelizmente consigo responder apenas mensagens de texto no momento. Pode digitar o que precisa?"
-- Nunca envie URLs ou links inventados.
-- Limite suas respostas a 300 caracteres (ideal para WhatsApp).
-- Use emojis com moderação (1-2 por mensagem, no máximo).`;
+function buildBehavioralRules(aiConfig: TenantData['aiConfig']): string {
+  const rules = [
+    '## Regras de Comportamento',
+    '- NUNCA invente informações sobre preços, serviços ou políticas que não foram fornecidas no contexto acima.',
+    '- Se não souber algo, diga que vai verificar com a equipe.',
+    '- Se o contato pedir para parar, diga: "Entendido! Se precisar de algo no futuro, é só mandar mensagem. Até mais!" e mude o estado para "closed".',
+    '- Se receber mensagem de áudio/imagem sem texto, diga: "Recebi sua mensagem! Infelizmente consigo responder apenas mensagens de texto no momento. Pode digitar o que precisa?"',
+    '- Nunca envie URLs ou links inventados.',
+    '- Limite suas respostas a 300 caracteres (ideal para WhatsApp).',
+    '- Use emojis com moderação (1-2 por mensagem, no máximo).',
+  ];
+
+  // Custom escalation rules
+  if (aiConfig.escalationRules) {
+    rules.push(`- Regra de escalação: ${aiConfig.escalationRules}`);
+  }
+
+  // Forbidden topics
+  if (aiConfig.forbiddenTopics && aiConfig.forbiddenTopics.length > 0) {
+    rules.push(`- NUNCA fale sobre os seguintes assuntos: ${aiConfig.forbiddenTopics.join(', ')}. Se perguntado, diga que não pode ajudar com esse tema.`);
+  }
+
+  // Custom closing message
+  if (aiConfig.closingMessage) {
+    rules.push(`- Ao encerrar a conversa, use como base: "${aiConfig.closingMessage}"`);
+  }
+
+  return rules.join('\n');
+}

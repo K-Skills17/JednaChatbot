@@ -24,6 +24,7 @@ export class TenantService {
         timezone: input.timezone,
         businessHours: input.businessHours,
         aiConfig: input.aiConfig,
+        notificationConfig: input.notificationConfig ?? undefined,
         plan: input.plan,
         status: 'onboarding',
       },

@@ -111,13 +111,37 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
   });
 
   if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        tenantId: tenant.id,
-        contactId: contact.id,
-        status: 'active',
-      },
+    // Check for a recently closed conversation to reopen
+    const recentClosed = await prisma.conversation.findFirst({
+      where: { tenantId: tenant.id, contactId: contact.id, status: 'closed' },
+      orderBy: { closedAt: 'desc' },
     });
+
+    const isRecent = recentClosed?.closedAt &&
+      Date.now() - recentClosed.closedAt.getTime() < 24 * 60 * 60 * 1000; // within 24h
+
+    if (recentClosed && isRecent) {
+      // Reopen the recently closed conversation
+      conversation = await prisma.conversation.update({
+        where: { id: recentClosed.id },
+        data: { status: 'active', closedAt: null },
+      });
+    } else {
+      // Create a new conversation with proper initial context
+      conversation = await prisma.conversation.create({
+        data: {
+          tenantId: tenant.id,
+          contactId: contact.id,
+          status: 'active',
+          context: {
+            state: contact.leadStatus === 'new' ? 'greeting' : 'qualifying',
+            extractedData: {},
+            qualificationComplete: false,
+            messageCount: 0,
+          },
+        },
+      });
+    }
   }
 
   // Store inbound message
