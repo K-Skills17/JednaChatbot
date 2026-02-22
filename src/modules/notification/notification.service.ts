@@ -44,7 +44,7 @@ export class NotificationService {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return;
 
-    const notifyConfig = (tenant.aiConfig as any)?.notifications;
+    const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.newLead) return;
 
     const content = `Novo lead: ${contactName || phone}\nTelefone: ${phone}`;
@@ -61,7 +61,7 @@ export class NotificationService {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return;
 
-    const notifyConfig = (tenant.aiConfig as any)?.notifications;
+    const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.booking) return;
 
     const dateStr = scheduledAt.toLocaleDateString('pt-BR', {
@@ -86,7 +86,7 @@ export class NotificationService {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return;
 
-    const notifyConfig = (tenant.aiConfig as any)?.notifications;
+    const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.escalation) return;
 
     const content = `Atendimento escalado!\nCliente: ${contactName || phone}\nTelefone: ${phone}${reason ? `\nMotivo: ${reason}` : ''}`;
@@ -146,6 +146,20 @@ export class NotificationService {
       });
     }
   }
+}
+
+/**
+ * Extract notification config from the correct tenant field.
+ * Checks `notificationConfig` (the dedicated field) first,
+ * then falls back to `aiConfig.notifications` for backward compatibility.
+ */
+function getNotifyConfig(tenant: any): any {
+  // Primary: dedicated notificationConfig column
+  if (tenant.notificationConfig && typeof tenant.notificationConfig === 'object') {
+    return tenant.notificationConfig;
+  }
+  // Fallback: nested inside aiConfig (legacy)
+  return (tenant.aiConfig as any)?.notifications ?? null;
 }
 
 export const notificationService = new NotificationService();

@@ -17,8 +17,35 @@ export const createTenantSchema = z.object({
       model: z.enum(['claude', 'openai']).default('claude'),
       temperature: z.number().min(0).max(1).default(0.7),
       qualificationCriteria: z.array(z.any()).default([]),
+      // Business context fields — this is how you "train" the chatbot for each business
+      businessDescription: z.string().optional(),     // What the business does
+      services: z.array(z.object({                    // Products/services offered
+        name: z.string(),
+        description: z.string().optional(),
+        price: z.string().optional(),                 // e.g. "R$ 150" or "a partir de R$ 200"
+      })).optional(),
+      faq: z.array(z.object({                         // Frequently asked questions
+        question: z.string(),
+        answer: z.string(),
+      })).optional(),
+      targetAudience: z.string().optional(),           // Who the business serves
+      tone: z.enum(['formal', 'casual', 'friendly']).default('friendly'),
+      greeting: z.string().optional(),                 // Custom first-message greeting
+      closingMessage: z.string().optional(),           // Custom goodbye message
+      escalationRules: z.string().optional(),          // When to escalate to human
+      forbiddenTopics: z.array(z.string()).optional(), // Topics the bot must NOT discuss
     })
-    .default({ model: 'claude', temperature: 0.7, qualificationCriteria: [] }),
+    .default({ model: 'claude', temperature: 0.7, qualificationCriteria: [], tone: 'friendly' as const }),
+  notificationConfig: z
+    .object({
+      newLead: z.boolean().default(true),
+      booking: z.boolean().default(true),
+      escalation: z.boolean().default(true),
+      ownerPhone: z.string().optional(),
+      ownerEmail: z.string().optional(),
+      webhookUrl: z.string().optional(),
+    })
+    .optional(),
   plan: z.enum(['starter', 'pro', 'enterprise']).default('starter'),
 });
 

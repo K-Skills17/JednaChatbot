@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database';
 import { evolutionClient } from '../whatsapp/evolution.client';
+import { evolutionConfig } from '../../config/evolution';
 import { logger } from '../../utils/logger';
 import { normalizeBrazilianPhone } from '../../utils/phone.utils';
 import { CreateTenantInput, UpdateTenantInput } from './tenant.schema';
@@ -24,6 +25,7 @@ export class TenantService {
         timezone: input.timezone,
         businessHours: input.businessHours,
         aiConfig: input.aiConfig,
+        notificationConfig: input.notificationConfig ?? undefined,
         plan: input.plan,
         status: 'onboarding',
       },
@@ -82,6 +84,14 @@ export class TenantService {
     const tenant = await prisma.tenant.findUnique({ where: { id } });
     if (!tenant?.evolutionInstanceId) throw new Error('No Evolution instance for this tenant');
 
+    // Ensure the instance exists (re-create if it was lost)
+    try {
+      await evolutionClient.getInstanceStatus(tenant.evolutionInstanceId);
+    } catch {
+      logger.info({ id }, 'Instance not found, recreating...');
+      await evolutionClient.createInstance(tenant.evolutionInstanceId);
+    }
+
     const qr = await evolutionClient.connectInstance(tenant.evolutionInstanceId);
     return qr;
   }
@@ -93,12 +103,36 @@ export class TenantService {
 
     const status = await evolutionClient.getInstanceStatus(tenant.evolutionInstanceId);
 
-    // If connected, activate tenant
+    // If connected, activate tenant and ensure webhook is configured
     if (status.state === 'open' && tenant.status === 'onboarding') {
       await prisma.tenant.update({ where: { id }, data: { status: 'active' } });
+
+      // Configure webhook to point to our app
+      try {
+        await evolutionClient.setWebhook(
+          tenant.evolutionInstanceId,
+          evolutionConfig.webhookUrl,
+        );
+        logger.info({ id, webhookUrl: evolutionConfig.webhookUrl }, 'Webhook configured on activation');
+      } catch (err) {
+        logger.warn({ err, id }, 'Failed to configure webhook on activation');
+      }
     }
 
     return status;
+  }
+
+  /** Manually (re)configure the webhook for a tenant's Evolution instance */
+  async setupWebhook(id: string) {
+    const tenant = await prisma.tenant.findUnique({ where: { id } });
+    if (!tenant?.evolutionInstanceId) throw new Error('No Evolution instance for this tenant');
+
+    await evolutionClient.setWebhook(
+      tenant.evolutionInstanceId,
+      evolutionConfig.webhookUrl,
+    );
+
+    return { webhookUrl: evolutionConfig.webhookUrl, instanceName: tenant.evolutionInstanceId };
   }
 
   /** Delete a tenant and its Evolution instance */

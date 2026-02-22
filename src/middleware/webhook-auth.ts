@@ -20,15 +20,23 @@ export async function webhookAuthMiddleware(
 
   // Strategy 2: HMAC signature verification (x-webhook-signature header)
   const signature = request.headers['x-webhook-signature'] as string | undefined;
-  if (signature) {
-    const rawBody = JSON.stringify(request.body);
-    const expected = crypto
-      .createHmac('sha256', env.EVOLUTION_API_KEY)
-      .update(rawBody)
-      .digest('hex');
+  if (signature && env.EVOLUTION_API_KEY) {
+    try {
+      const rawBody = JSON.stringify(request.body);
+      const expected = crypto
+        .createHmac('sha256', env.EVOLUTION_API_KEY)
+        .update(rawBody)
+        .digest('hex');
 
-    if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
-      return; // Authenticated
+      const sigBuf = Buffer.from(signature);
+      const expectedBuf = Buffer.from(expected);
+
+      // timingSafeEqual requires buffers of equal length — guard against crash
+      if (sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf)) {
+        return; // Authenticated
+      }
+    } catch {
+      logger.warn('HMAC signature verification error');
     }
   }
 
@@ -42,5 +50,5 @@ export async function webhookAuthMiddleware(
     { ip: request.ip, url: request.url },
     'Webhook authentication failed',
   );
-  reply.code(401).send({ error: 'Unauthorized webhook request' });
+  return reply.code(401).send({ error: 'Unauthorized webhook request' });
 }

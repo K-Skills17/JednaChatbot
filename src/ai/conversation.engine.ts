@@ -75,7 +75,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   // 7. Load recent conversation history
   const history = await loadHistory(conversationId);
 
-  // 8. Build system prompt
+  // 8. Build system prompt (pass full aiConfig for business knowledge base)
   const systemPrompt = buildSystemPrompt(
     {
       businessName: tenant.businessName,
@@ -84,6 +84,15 @@ export async function processMessage(job: MessageJobData): Promise<void> {
       aiConfig: {
         systemPrompt: aiConfig.systemPrompt,
         qualificationCriteria: aiConfig.qualificationCriteria ?? [],
+        businessDescription: aiConfig.businessDescription,
+        services: aiConfig.services,
+        faq: aiConfig.faq,
+        targetAudience: aiConfig.targetAudience,
+        tone: aiConfig.tone,
+        greeting: aiConfig.greeting,
+        closingMessage: aiConfig.closingMessage,
+        escalationRules: aiConfig.escalationRules,
+        forbiddenTopics: aiConfig.forbiddenTopics,
       },
     },
     {
@@ -135,7 +144,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   // 13. Create booking if AI confirmed a date/time
   if (action.bookingDate && action.bookingTime && action.nextState === 'closed') {
     try {
-      const scheduledAt = parseBookingDateTime(action.bookingDate, action.bookingTime);
+      const scheduledAt = parseBookingDateTime(action.bookingDate, action.bookingTime, tenant.timezone);
       if (scheduledAt) {
         await bookingService.create({
           tenantId,
@@ -223,14 +232,16 @@ function resolveMessageText(text: string | null, messageType: string): string {
 }
 
 async function loadHistory(conversationId: string): Promise<AiMessage[]> {
+  // Fetch the LATEST N messages (desc), then reverse to chronological order
   const messages = await prisma.message.findMany({
     where: { conversationId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     take: MAX_HISTORY_MESSAGES,
     select: { direction: true, content: true },
   });
 
   return messages
+    .reverse() // back to chronological order (oldest first)
     .filter((m) => m.content)
     .map((m) => ({
       role: (m.direction === 'inbound' ? 'user' : 'assistant') as 'user' | 'assistant',
@@ -275,14 +286,27 @@ function parseActionJson(jsonStr: string, rawText: string): AiAction {
   };
 }
 
-function parseBookingDateTime(dateStr: string, timeStr: string): Date | null {
+function parseBookingDateTime(dateStr: string, timeStr: string, timezone: string): Date | null {
   try {
-    // Support formats like "2026-02-15" + "14:30"
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const date = new Date(year, month - 1, day, hours, minutes);
-    if (isNaN(date.getTime())) return null;
-    return date;
+    // Build an ISO-like string and interpret it in the tenant's timezone.
+    // e.g. "2026-02-15" + "14:30" + "America/Sao_Paulo"
+    // We construct a date string and use toLocaleString to reverse-map the timezone offset.
+    const isoStr = `${dateStr}T${timeStr}:00`;
+
+    // Parse as if in the given timezone by computing the UTC offset
+    const localDate = new Date(isoStr); // parsed as local (server TZ)
+    if (isNaN(localDate.getTime())) return null;
+
+    // Get the time in the target timezone, then compute the offset
+    const inTz = new Date(localDate.toLocaleString('en-US', { timeZone: timezone }));
+    const inUtc = new Date(localDate.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const offsetMs = inUtc.getTime() - inTz.getTime();
+
+    // The desired UTC time is: the naive datetime + the timezone offset
+    const naiveMs = localDate.getTime();
+    const utcDate = new Date(naiveMs + offsetMs);
+    if (isNaN(utcDate.getTime())) return null;
+    return utcDate;
   } catch {
     return null;
   }

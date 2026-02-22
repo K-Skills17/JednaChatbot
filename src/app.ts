@@ -9,8 +9,10 @@ import { registerCampaignRoutes } from './modules/campaign/campaign.routes';
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
 import { env } from './config/env';
+import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
+import { evolutionClient } from './modules/whatsapp/evolution.client';
 
 export async function buildApp() {
   const app = Fastify({
@@ -67,10 +69,31 @@ export async function buildApp() {
       checks.redis = 'skipped';
     }
 
+    // Evolution API check
+    if (env.EVOLUTION_API_URL) {
+      try {
+        const instances = await evolutionClient.listInstances();
+        checks.evolution = 'ok';
+        (checks as any).evolutionInstances = instances?.length ?? 0;
+      } catch {
+        checks.evolution = 'error';
+      }
+    } else {
+      checks.evolution = 'skipped';
+    }
+
     const allOk = Object.values(checks).every((v) => v === 'ok' || v === 'skipped');
     const status = allOk ? 'ready' : 'degraded';
 
-    return reply.code(allOk ? 200 : 503).send({ status, checks });
+    return reply.code(allOk ? 200 : 503).send({
+      status,
+      checks,
+      config: {
+        webhookUrl: evolutionConfig.webhookUrl,
+        evolutionUrl: env.EVOLUTION_API_URL || 'not set',
+        aiProvider: env.AI_PRIMARY_PROVIDER,
+      },
+    });
   });
 
   // ─── Routes (each wrapped in register() for hook encapsulation) ───
