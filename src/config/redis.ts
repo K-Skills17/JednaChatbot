@@ -2,17 +2,16 @@ import { env } from './env';
 
 // Use ioredis from the same package that BullMQ uses to ensure type compatibility.
 // BullMQ bundles its own ioredis — using a separate version causes type conflicts.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const IORedis = require('ioredis') as typeof import('ioredis').default;
-type RedisClient = InstanceType<typeof IORedis>;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const IORedis = require('ioredis');
 
 // Lazy singleton — Redis client is only created when first accessed,
 // not at module import time. This lets the app boot for health checks
 // even when REDIS_URL is not configured or unreachable.
 
-let _redis: RedisClient | null = null;
+let _redis: any = null;
 
-function getRedis(): RedisClient {
+function getRedis(): any {
   if (!_redis) {
     if (!env.REDIS_URL) {
       throw new Error('REDIS_URL is not configured');
