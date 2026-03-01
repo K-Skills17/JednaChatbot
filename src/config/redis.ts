@@ -11,7 +11,7 @@ const IORedis = require('ioredis');
 
 let _redis: any = null;
 
-function getRedis(): any {
+export function getRedis(): any {
   if (!_redis) {
     if (!env.REDIS_URL) {
       throw new Error('REDIS_URL is not configured');
