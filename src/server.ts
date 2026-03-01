@@ -23,9 +23,10 @@ async function main() {
 
   const app = await buildApp();
 
-  // In production, always listen on 3000 (must match railway.toml internalPort).
-  // Railway injects its own PORT env var which may differ — ignore it.
-  const port = env.NODE_ENV === 'production' ? 3000 : env.PORT;
+  // Use PORT from environment (Railway injects this at runtime).
+  // Fallback to 3000 for local development.
+  const port = Number(process.env.PORT) || env.PORT;
+  logger.info(`Binding to port ${port}`);
 
   // Start the server FIRST so health check responds immediately
   await app.listen({ port, host: '0.0.0.0' });
