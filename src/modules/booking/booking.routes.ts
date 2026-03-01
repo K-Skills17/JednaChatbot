@@ -1,9 +1,14 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { google } from 'googleapis';
 import { bookingService } from './booking.service';
 import { authMiddleware } from '../../middleware/auth';
 import { env } from '../../config/env';
 import { prisma } from '../../config/database';
+
+// Lazy-load googleapis — it takes ~5s to import and blocks the entire server startup
+function getGoogle() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('googleapis').google as typeof import('googleapis').google;
+}
 
 export function registerBookingRoutes(app: FastifyInstance): void {
   // All booking routes require API key
@@ -122,7 +127,7 @@ export function registerBookingRoutes(app: FastifyInstance): void {
         return reply.code(400).send({ error: 'Google Calendar not configured' });
       }
 
-      const oauth2Client = new google.auth.OAuth2(
+      const oauth2Client = new (getGoogle()).auth.OAuth2(
         env.GOOGLE_CLIENT_ID,
         env.GOOGLE_CLIENT_SECRET,
         env.GOOGLE_REDIRECT_URI,
@@ -152,7 +157,7 @@ export function registerBookingRoutes(app: FastifyInstance): void {
         return reply.code(400).send({ error: 'Google Calendar not configured' });
       }
 
-      const oauth2Client = new google.auth.OAuth2(
+      const oauth2Client = new (getGoogle()).auth.OAuth2(
         env.GOOGLE_CLIENT_ID,
         env.GOOGLE_CLIENT_SECRET,
         env.GOOGLE_REDIRECT_URI,
