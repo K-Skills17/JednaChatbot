@@ -22,4 +22,5 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/server.js"]
+# prisma db push is best-effort — server must always start so health check responds
+CMD ["sh", "-c", "npx prisma db push --skip-generate || echo 'prisma db push failed — will retry next deploy'; exec node dist/server.js"]
