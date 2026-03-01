@@ -110,7 +110,7 @@ echo ""
 
 # ---- Step 8: Run database migrations ----
 info "Step 8: Pushing database schema..."
-railway run npx prisma db push --skip-generate
+railway run npx prisma db push
 ok "Database schema applied."
 echo ""
 

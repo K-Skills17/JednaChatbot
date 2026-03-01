@@ -149,7 +149,7 @@ ok "Prisma client generated"
 # ─── Step 4: Push database schema ───────────────────────────
 step "4" "Pushing database schema to PostgreSQL"
 
-npx prisma db push --skip-generate 2>&1 | tail -5
+npx prisma db push 2>&1 | tail -5
 ok "Database schema applied"
 
 # ─── Step 5: Seed tenant ────────────────────────────────────
