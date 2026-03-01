@@ -352,13 +352,12 @@ export function dashboardHtml(): string {
   <div class="modal">
     <h3>Create New Tenant</h3>
     <div class="form-field"><label>Business Name *</label><input id="nt-name" placeholder="Clinica Dental SP" /></div>
-    <div class="form-field"><label>Owner Name *</label><input id="nt-owner" placeholder="Jo\\u00e3o Silva" /></div>
-    <div class="form-field"><label>Phone (WhatsApp) *</label><input id="nt-phone" placeholder="5511999998888" /></div>
+    <div class="form-field"><label>WhatsApp Number *</label><input id="nt-phone" placeholder="5511999998888" /></div>
     <div class="form-field"><label>Plan</label>
-      <select id="nt-plan"><option value="trial">Trial</option><option value="basic">Basic</option><option value="professional">Professional</option><option value="enterprise">Enterprise</option></select>
+      <select id="nt-plan"><option value="starter">Starter</option><option value="pro">Pro</option><option value="enterprise">Enterprise</option></select>
     </div>
     <div class="form-field"><label>AI Provider</label>
-      <select id="nt-ai"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option></select>
+      <select id="nt-ai"><option value="claude">Claude</option><option value="openai">OpenAI</option></select>
     </div>
     <div id="nt-error" style="color:var(--red);font-size:13px;display:none"></div>
     <div class="modal-actions">
@@ -489,20 +488,20 @@ export function dashboardHtml(): string {
       return;
     }
     tbody.innerHTML = tenants.map(function(t) {
-      var plan = (t.plan || 'trial').toLowerCase();
-      var planBadge = plan === 'enterprise' ? 'badge-blue' : plan === 'professional' ? 'badge-green' : plan === 'basic' ? 'badge-yellow' : 'badge-dim';
+      var plan = (t.plan || 'starter').toLowerCase();
+      var planBadge = plan === 'enterprise' ? 'badge-blue' : plan === 'pro' ? 'badge-green' : 'badge-dim';
       var date = new Date(t.createdAt).toLocaleDateString();
       if (compact) {
         return '<tr>'
           + '<td>' + esc(t.businessName || t.name || '—') + '</td>'
-          + '<td>' + esc(t.phone || '—') + '</td>'
+          + '<td>' + esc(t.whatsappNumber || t.phone || '—') + '</td>'
           + '<td><span class="badge ' + planBadge + '">' + esc(plan) + '</span></td>'
           + '<td><span class="badge ' + (t.active !== false ? 'badge-green' : 'badge-red') + '">' + (t.active !== false ? 'Active' : 'Inactive') + '</span></td>'
           + '<td>' + date + '</td></tr>';
       }
       return '<tr>'
         + '<td><strong>' + esc(t.businessName || t.name || '—') + '</strong></td>'
-        + '<td>' + esc(t.phone || '—') + '</td>'
+        + '<td>' + esc(t.whatsappNumber || t.phone || '—') + '</td>'
         + '<td><span class="badge ' + planBadge + '">' + esc(plan) + '</span></td>'
         + '<td><span class="badge ' + (t.whatsappConnected ? 'badge-green' : 'badge-dim') + '">' + (t.whatsappConnected ? 'Connected' : 'Disconnected') + '</span></td>'
         + '<td>' + esc(t.aiProvider || '—') + '</td>'
@@ -602,19 +601,18 @@ export function dashboardHtml(): string {
 
   function createTenant() {
     var name = document.getElementById('nt-name').value.trim();
-    var owner = document.getElementById('nt-owner').value.trim();
     var phone = document.getElementById('nt-phone').value.trim();
     var plan = document.getElementById('nt-plan').value;
     var ai = document.getElementById('nt-ai').value;
-    if (!name || !owner || !phone) {
+    if (!name || !phone) {
       var err = document.getElementById('nt-error');
-      err.textContent = 'Name, owner, and phone are required.';
+      err.textContent = 'Business name and WhatsApp number are required.';
       err.style.display = 'block';
       return;
     }
     apiFetch('/api/tenants', {
       method: 'POST',
-      body: JSON.stringify({ businessName: name, ownerName: owner, phone: phone, plan: plan, aiProvider: ai }),
+      body: JSON.stringify({ businessName: name, whatsappNumber: phone, plan: plan, aiConfig: { model: ai } }),
     }).then(function(res) {
       if (res.ok) {
         closeNewTenantModal();
