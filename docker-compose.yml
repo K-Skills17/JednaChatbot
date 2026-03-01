@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -39,7 +37,7 @@ services:
     container_name: lk-evolution
     restart: unless-stopped
     ports:
-      - '8080:8080'
+      - '${EVOLUTION_PORT:-8080}:8080'
     environment:
       # IMPORTANT: Set EVOLUTION_API_KEY in your .env file, never use "change-me" in production
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-change-me-in-dotenv}

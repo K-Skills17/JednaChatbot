@@ -7,8 +7,24 @@ import { campaignProcessor } from './campaign.processor';
 import { campaignSchedulerProcessor } from './campaign.scheduler';
 import { notificationProcessor } from './notification.processor';
 
+/**
+ * Parse REDIS_URL into ioredis-compatible options.
+ * Do NOT pass { url: '...' } — 'url' is not a valid ioredis option and causes
+ * BullMQ's "client[commandNameWithVersion] is not a function" error.
+ */
+function parseRedisUrl(redisUrl: string) {
+  const parsed = new URL(redisUrl);
+  return {
+    host: parsed.hostname || 'localhost',
+    port: parseInt(parsed.port, 10) || 6379,
+    password: parsed.password || undefined,
+    db: parsed.pathname ? parseInt(parsed.pathname.slice(1), 10) || 0 : 0,
+    maxRetriesPerRequest: null as null, // Required by BullMQ
+  };
+}
+
 function getConnection() {
-  return { connection: { url: env.REDIS_URL, maxRetriesPerRequest: null } };
+  return { connection: parseRedisUrl(env.REDIS_URL) };
 }
 
 // ─── Lazy Queue Getters ─────────────────────────────────────
