@@ -15,8 +15,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY prisma ./prisma/
-COPY prisma.config.ts ./
-# Copy prisma CLI from builder so we can run db push at deploy time
+# JS config for production — avoids needing tsx at runtime
+COPY prisma.config.js ./
+# Prisma CLI + engines for running db push at deploy time
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
 ENV NODE_ENV=production

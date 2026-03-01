@@ -12,10 +12,17 @@ const BATCHES_PER_DAY = (10 * 60) / SCHEDULER_INTERVAL_MINUTES;
 export async function campaignSchedulerProcessor(job: Job): Promise<void> {
   logger.debug({ jobId: job.id }, 'Campaign scheduler tick');
 
-  const activeCampaigns = await prisma.campaign.findMany({
-    where: { status: 'active' },
-    include: { tenant: true },
-  });
+  let activeCampaigns;
+  try {
+    activeCampaigns = await prisma.campaign.findMany({
+      where: { status: 'active' },
+      include: { tenant: true },
+    });
+  } catch (err) {
+    // Database not available — skip this tick silently
+    logger.debug({ err }, 'Campaign scheduler skipped — database unavailable');
+    return;
+  }
 
   for (const campaign of activeCampaigns) {
     try {
