@@ -23,4 +23,4 @@ COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/eng
 ENV NODE_ENV=production
 EXPOSE 3000
 # prisma db push is best-effort — server must always start so health check responds
-CMD ["sh", "-c", "npx prisma db push 2>&1 && echo 'prisma db push succeeded' || echo 'prisma db push failed — will retry next deploy'; exec node dist/server.js"]
+CMD ["sh", "-c", "npx prisma db push --config prisma.config.mjs 2>&1 && echo 'prisma db push succeeded' || echo 'prisma db push failed — will retry next deploy'; exec node dist/server.js"]
