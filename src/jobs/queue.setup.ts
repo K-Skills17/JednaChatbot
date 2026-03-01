@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq';
-import { redis } from '../config/redis';
+import { getRedis } from '../config/redis';
 import { logger } from '../utils/logger';
 import { messageProcessor } from './message.processor';
 import { reminderProcessor } from './reminder.processor';
@@ -8,7 +8,7 @@ import { campaignSchedulerProcessor } from './campaign.scheduler';
 import { notificationProcessor } from './notification.processor';
 
 function getConnection() {
-  return { connection: redis };
+  return { connection: getRedis() };
 }
 
 // ─── Lazy Queue Getters ─────────────────────────────────────
