@@ -1,6 +1,11 @@
-import { google, calendar_v3 } from 'googleapis';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
+
+// Lazy-load googleapis — it takes ~5s to import and blocks the entire server startup
+function getGoogle() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require('googleapis').google as typeof import('googleapis').google;
+}
 
 /** Per-tenant Google Calendar credentials stored in tenant.bookingConfig JSON */
 export interface CalendarCredentials {
@@ -27,10 +32,11 @@ export interface CalendarEvent {
  * Each tenant has their own OAuth tokens stored in bookingConfig.
  */
 export class CalendarClient {
-  private calendar: calendar_v3.Calendar;
+  private calendar: any;
   private calendarId: string;
 
   constructor(credentials: CalendarCredentials) {
+    const google = getGoogle();
     const oauth2Client = new google.auth.OAuth2(
       env.GOOGLE_CLIENT_ID,
       env.GOOGLE_CLIENT_SECRET,
@@ -58,8 +64,8 @@ export class CalendarClient {
 
     const busy = response.data.calendars?.[this.calendarId]?.busy ?? [];
     return busy
-      .filter((slot) => slot.start && slot.end)
-      .map((slot) => ({
+      .filter((slot: any) => slot.start && slot.end)
+      .map((slot: any) => ({
         start: new Date(slot.start!),
         end: new Date(slot.end!),
       }));
