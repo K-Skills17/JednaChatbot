@@ -66,7 +66,7 @@ export function startMessageWorker(): void {
   });
 
   worker.on('error', (err) => {
-    logger.error({ err: err.message }, 'Message worker error');
+    logger.error({ err }, 'Message worker error');
   });
 
   logger.info('Message processing worker started (AI engine)');
@@ -88,7 +88,7 @@ export function startReminderWorker(): void {
   });
 
   worker.on('error', (err) => {
-    logger.error({ err: err.message }, 'Reminder worker error');
+    logger.error({ err }, 'Reminder worker error');
   });
 
   logger.info('Reminder worker started');
@@ -113,7 +113,7 @@ export function startCampaignWorker(): void {
   });
 
   worker.on('error', (err) => {
-    logger.error({ err: err.message }, 'Campaign worker error');
+    logger.error({ err }, 'Campaign worker error');
   });
 
   logger.info('Campaign sending worker started');
@@ -145,7 +145,7 @@ export async function startCampaignScheduler(): Promise<void> {
   });
 
   worker.on('error', (err) => {
-    logger.error({ err: err.message }, 'Campaign scheduler worker error');
+    logger.error({ err }, 'Campaign scheduler worker error');
   });
 
   logger.info('Campaign scheduler started (every 5 minutes)');
@@ -170,7 +170,7 @@ export function startNotificationWorker(): void {
   });
 
   worker.on('error', (err) => {
-    logger.error({ err: err.message }, 'Notification worker error');
+    logger.error({ err }, 'Notification worker error');
   });
 
   logger.info('Notification worker started');
