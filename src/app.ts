@@ -14,6 +14,7 @@ import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
 import { evolutionClient } from './modules/whatsapp/evolution.client';
+import { dashboardHtml } from './views/dashboard';
 
 export async function buildApp() {
   const app = Fastify({
@@ -42,6 +43,12 @@ export async function buildApp() {
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
+  });
+
+  // ─── Admin Dashboard ─────────────────────────────────────
+
+  app.get('/', async (_request, reply) => {
+    return reply.type('text/html').send(dashboardHtml());
   });
 
   // ─── Health Check ─────────────────────────────────────────
