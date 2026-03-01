@@ -14,8 +14,11 @@ function getPrisma(): PrismaClient {
     if (!env.DATABASE_URL) {
       throw new Error('DATABASE_URL is not configured');
     }
-    const pool = new Pool({ connectionString: env.DATABASE_URL });
-    const adapter = new PrismaPg(pool);
+    // Use lk_chatbot schema so we don't collide with Evolution API's public schema
+    const sep = env.DATABASE_URL.includes('?') ? '&' : '?';
+    const url = `${env.DATABASE_URL}${sep}schema=lk_chatbot`;
+    const pool = new Pool({ connectionString: url });
+    const adapter = new PrismaPg(pool, { schema: 'lk_chatbot' });
     _prisma = new PrismaClient({ adapter });
   }
   return _prisma;
