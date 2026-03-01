@@ -2,11 +2,7 @@
 builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "node dist/server.js"
 healthcheckPath = "/health"
-healthcheckTimeout = 600
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
-
-[service]
-internalPort = 3000
