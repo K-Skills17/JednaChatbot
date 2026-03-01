@@ -26,7 +26,7 @@ async function main() {
   // Use PORT from environment (Railway injects this at runtime).
   // Fallback to 3000 for local development.
   const port = Number(process.env.PORT) || env.PORT;
-  logger.info(`Binding to port ${port}`);
+  logger.info({ envPort: process.env.PORT, resolvedPort: port }, `Binding to port ${port}`);
 
   // Start the server FIRST so health check responds immediately
   await app.listen({ port, host: '0.0.0.0' });
