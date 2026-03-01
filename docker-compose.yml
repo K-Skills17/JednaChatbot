@@ -22,7 +22,7 @@ services:
     container_name: lk-redis
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - '${REDIS_PORT:-6380}:6379'
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
