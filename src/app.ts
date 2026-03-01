@@ -7,6 +7,7 @@ import { registerTenantRoutes } from './modules/tenant/tenant.routes';
 import { registerBookingRoutes } from './modules/booking/booking.routes';
 import { registerCampaignRoutes } from './modules/campaign/campaign.routes';
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes';
+import { registerTrainingRoutes } from './modules/training/training.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
@@ -27,7 +28,16 @@ export async function buildApp() {
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
-  await app.register(helmet);
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],  // Training page uses inline scripts
+        styleSrc: ["'self'", "'unsafe-inline'"],    // Training page uses inline styles
+        imgSrc: ["'self'", 'data:'],
+      },
+    },
+  });
 
   await app.register(rateLimit, {
     max: 100,
@@ -103,6 +113,7 @@ export async function buildApp() {
   app.register(async (instance) => registerBookingRoutes(instance));
   app.register(async (instance) => registerCampaignRoutes(instance));
   app.register(async (instance) => registerAnalyticsRoutes(instance));
+  app.register(async (instance) => registerTrainingRoutes(instance));
 
   // ─── Error Handler ────────────────────────────────────────
 
