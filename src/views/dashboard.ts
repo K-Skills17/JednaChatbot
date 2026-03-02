@@ -445,8 +445,8 @@ export function dashboardHtml(): string {
     }).catch(function() {});
 
     apiFetch('/api/tenants?page=1&limit=5').then(function(r) { return r.json(); }).then(function(data) {
-      document.getElementById('stat-tenants').textContent = data.total != null ? data.total : (data.data ? data.data.length : '—');
-      renderTenantRows('overview-tenants-body', (data.data || []).slice(0, 5), true);
+      document.getElementById('stat-tenants').textContent = data.total != null ? data.total : (data.tenants ? data.tenants.length : '—');
+      renderTenantRows('overview-tenants-body', (data.tenants || []).slice(0, 5), true);
     }).catch(function() {});
 
     document.getElementById('stat-campaigns').textContent = '—';
@@ -457,7 +457,7 @@ export function dashboardHtml(): string {
 
   function loadTenants() {
     apiFetch('/api/tenants?page=1&limit=50').then(function(r) { return r.json(); }).then(function(data) {
-      tenantsCache = data.data || [];
+      tenantsCache = data.tenants || [];
       renderTenantRows('tenants-body', tenantsCache, false);
       document.getElementById('stat-tenants').textContent = data.total != null ? data.total : tenantsCache.length;
 
@@ -621,7 +621,13 @@ export function dashboardHtml(): string {
       } else {
         return res.json().then(function(data) {
           var err = document.getElementById('nt-error');
-          err.textContent = data.error || 'Failed to create tenant.';
+          var msg = data.error || 'Failed to create tenant.';
+          if (data.details && data.details.fieldErrors) {
+            var fields = data.details.fieldErrors;
+            var extras = Object.keys(fields).map(function(k) { return k + ': ' + fields[k].join(', '); });
+            if (extras.length) msg += ' (' + extras.join('; ') + ')';
+          }
+          err.textContent = msg;
           err.style.display = 'block';
         });
       }
