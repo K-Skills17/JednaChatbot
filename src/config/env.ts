@@ -24,7 +24,7 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),
 
-  WEBHOOK_BASE_URL: z.string().url().default('http://localhost:3000'),
+  WEBHOOK_BASE_URL: z.string().default('http://localhost:3000'),
 });
 
 function loadEnv() {
