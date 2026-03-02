@@ -75,7 +75,7 @@ export async function buildApp() {
     }
 
     // Redis check
-    if (env.REDIS_URL && env.REDIS_URL !== 'redis://localhost:6379') {
+    if (env.REDIS_URL) {
       try {
         await redis.ping();
         checks.redis = 'ok';
@@ -87,11 +87,12 @@ export async function buildApp() {
     }
 
     // Evolution API check
+    let evolutionInstanceCount: number | undefined;
     if (env.EVOLUTION_API_URL) {
       try {
         const instances = await evolutionClient.listInstances();
         checks.evolution = 'ok';
-        (checks as any).evolutionInstances = instances?.length ?? 0;
+        evolutionInstanceCount = instances?.length ?? 0;
       } catch {
         checks.evolution = 'error';
       }
@@ -105,6 +106,7 @@ export async function buildApp() {
     return reply.code(allOk ? 200 : 503).send({
       status,
       checks,
+      evolutionInstances: evolutionInstanceCount,
       config: {
         webhookUrl: evolutionConfig.webhookUrl,
         evolutionUrl: env.EVOLUTION_API_URL || 'not set',

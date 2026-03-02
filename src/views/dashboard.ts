@@ -284,10 +284,31 @@ export function dashboardHtml(): string {
 
     <!-- CAMPAIGNS -->
     <div id="page-campaigns" class="page">
-      <div class="page-header"><h2>Campaigns</h2></div>
+      <div class="page-header">
+        <h2>Campaigns</h2>
+        <button class="btn btn-sm" id="btn-new-campaign">+ New Campaign</button>
+      </div>
       <p style="color:var(--text-dim);font-size:14px;margin-bottom:16px">Select a tenant to view campaigns, or browse by tenant below.</p>
       <div id="campaigns-content"><div class="empty-state"><div class="spinner"></div></div></div>
     </div>
+
+<!-- NEW CAMPAIGN MODAL -->
+<div class="modal-overlay" id="new-campaign-modal">
+  <div class="modal">
+    <h3>Create New Campaign</h3>
+    <div class="form-field"><label>Tenant *</label>
+      <select id="nc-tenant"><option value="">Select a tenant...</option></select>
+    </div>
+    <div class="form-field"><label>Campaign Name *</label><input id="nc-name" placeholder="March Promo" /></div>
+    <div class="form-field"><label>Message Template *</label><textarea id="nc-message" rows="4" placeholder="Hi {{name}}, we have a special offer..." style="width:100%;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:inherit"></textarea></div>
+    <div class="form-field"><label>Send Rate / Day</label><input id="nc-rate" type="number" value="20" min="1" max="200" /></div>
+    <div id="nc-error" style="color:var(--red);font-size:13px;display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-outline" id="btn-cancel-campaign">Cancel</button>
+      <button class="btn btn-sm" id="btn-create-campaign">Create</button>
+    </div>
+  </div>
+</div>
 
     <!-- HEALTH -->
     <div id="page-health" class="page">
@@ -547,6 +568,62 @@ export function dashboardHtml(): string {
     });
   }
 
+  // ── Campaign CRUD ────────────────────────────────
+  function openNewCampaignModal() {
+    var select = document.getElementById('nc-tenant');
+    select.innerHTML = '<option value="">Select a tenant...</option>';
+    tenantsCache.forEach(function(t) {
+      select.innerHTML += '<option value="' + t.id + '">' + esc(t.businessName || t.name || t.id) + '</option>';
+    });
+    document.getElementById('nc-error').style.display = 'none';
+    document.getElementById('new-campaign-modal').classList.add('open');
+  }
+
+  function closeNewCampaignModal() {
+    document.getElementById('new-campaign-modal').classList.remove('open');
+  }
+
+  function createCampaign() {
+    var tenantId = document.getElementById('nc-tenant').value;
+    var name = document.getElementById('nc-name').value.trim();
+    var message = document.getElementById('nc-message').value.trim();
+    var rate = parseInt(document.getElementById('nc-rate').value, 10) || 20;
+    if (!tenantId || !name || !message) {
+      var err = document.getElementById('nc-error');
+      err.textContent = 'Tenant, campaign name, and message template are required.';
+      err.style.display = 'block';
+      return;
+    }
+    var btn = document.getElementById('btn-create-campaign');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+    apiFetch('/api/tenants/' + tenantId + '/campaigns', {
+      method: 'POST',
+      body: JSON.stringify({ name: name, messageTemplate: message, sendRatePerDay: rate }),
+    }).then(function(res) {
+      if (res.ok) {
+        document.getElementById('nc-name').value = '';
+        document.getElementById('nc-message').value = '';
+        document.getElementById('nc-rate').value = '20';
+        closeNewCampaignModal();
+        loadAllCampaigns();
+      } else {
+        return res.json().then(function(data) {
+          var err = document.getElementById('nc-error');
+          err.textContent = data.error || 'Failed to create campaign.';
+          err.style.display = 'block';
+        });
+      }
+    }).catch(function() {
+      var err = document.getElementById('nc-error');
+      err.textContent = 'Network error. Try again.';
+      err.style.display = 'block';
+    }).finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Create';
+    });
+  }
+
   // ── Health ────────────────────────────────────────
   function loadHealth() {
     Promise.all([
@@ -610,11 +687,16 @@ export function dashboardHtml(): string {
       err.style.display = 'block';
       return;
     }
+    var btn = document.getElementById('btn-create-tenant');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
     apiFetch('/api/tenants', {
       method: 'POST',
       body: JSON.stringify({ businessName: name, whatsappNumber: phone, plan: plan, aiConfig: { model: ai } }),
     }).then(function(res) {
       if (res.ok) {
+        document.getElementById('nt-name').value = '';
+        document.getElementById('nt-phone').value = '';
         closeNewTenantModal();
         loadTenants();
         loadOverview();
@@ -635,6 +717,9 @@ export function dashboardHtml(): string {
       var err = document.getElementById('nt-error');
       err.textContent = 'Network error. Try again.';
       err.style.display = 'block';
+    }).finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Create';
     });
   }
 
@@ -664,6 +749,9 @@ export function dashboardHtml(): string {
   document.getElementById('btn-refresh-health').addEventListener('click', loadHealth);
   document.getElementById('btn-cancel-tenant').addEventListener('click', closeNewTenantModal);
   document.getElementById('btn-create-tenant').addEventListener('click', createTenant);
+  document.getElementById('btn-new-campaign').addEventListener('click', openNewCampaignModal);
+  document.getElementById('btn-cancel-campaign').addEventListener('click', closeNewCampaignModal);
+  document.getElementById('btn-create-campaign').addEventListener('click', createCampaign);
 
   // Delegate clicks for dynamically-rendered delete links
   document.addEventListener('click', function(e) {
