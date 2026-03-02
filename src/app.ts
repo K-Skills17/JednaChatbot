@@ -22,6 +22,17 @@ export async function buildApp() {
     trustProxy: true,
   });
 
+  // ─── Allow empty-body JSON requests (e.g. DELETE with Content-Type header) ──
+  app.addHook('preParsing', async (request, _reply, payload) => {
+    if (
+      request.headers['content-type']?.includes('application/json') &&
+      request.headers['content-length'] === '0'
+    ) {
+      request.headers['content-type'] = undefined as any;
+    }
+    return payload;
+  });
+
   // ─── Plugins ──────────────────────────────────────────────
 
   await app.register(cors, {
