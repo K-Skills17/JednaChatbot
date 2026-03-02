@@ -102,7 +102,8 @@ export async function buildApp() {
         checks.redis = 'ok';
       } catch (err: any) {
         checks.redis = 'error';
-        errors.redis = err?.message ?? 'Unknown Redis error';
+        const sanitizedUrl = env.REDIS_URL.replace(/\/\/.*@/, '//***@');
+        errors.redis = `${err?.message ?? 'Unknown Redis error'} (URL: ${sanitizedUrl})`;
       }
     } else {
       checks.redis = 'skipped';
@@ -115,7 +116,7 @@ export async function buildApp() {
         checks.evolution = 'ok';
       } else {
         checks.evolution = 'error';
-        errors.evolution = `${evoHealth.detail} (URL: ${env.EVOLUTION_API_URL})`;
+        errors.evolution = `${evoHealth.detail} (URL: ${evolutionConfig.baseUrl})`;
       }
     } else {
       checks.evolution = 'skipped';
@@ -132,7 +133,8 @@ export async function buildApp() {
       ...(Object.keys(errors).length > 0 ? { errors } : {}),
       config: {
         webhookUrl: evolutionConfig.webhookUrl,
-        evolutionUrl: env.EVOLUTION_API_URL || 'not set',
+        evolutionUrl: evolutionConfig.baseUrl || 'not set',
+        evolutionUrlRaw: env.EVOLUTION_API_URL || 'not set',
         redisUrl: env.REDIS_URL ? env.REDIS_URL.replace(/\/\/.*@/, '//***@') : 'not set',
         aiProvider: env.AI_PRIMARY_PROVIDER,
       },
