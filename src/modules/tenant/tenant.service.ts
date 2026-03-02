@@ -135,7 +135,7 @@ export class TenantService {
     return { webhookUrl: evolutionConfig.webhookUrl, instanceName: tenant.evolutionInstanceId };
   }
 
-  /** Delete a tenant and its Evolution instance */
+  /** Delete a tenant and all its related data */
   async delete(id: string) {
     const tenant = await prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new Error('Tenant not found');
@@ -148,8 +148,21 @@ export class TenantService {
       }
     }
 
-    await prisma.tenant.delete({ where: { id } });
-    logger.info({ id }, 'Tenant deleted');
+    // Delete child records in dependency order to avoid FK violations
+    await prisma.$transaction([
+      prisma.notification.deleteMany({ where: { tenantId: id } }),
+      prisma.message.deleteMany({ where: { tenantId: id } }),
+      prisma.conversation.deleteMany({ where: { tenantId: id } }),
+      prisma.campaignContact.deleteMany({
+        where: { campaign: { tenantId: id } },
+      }),
+      prisma.campaign.deleteMany({ where: { tenantId: id } }),
+      prisma.booking.deleteMany({ where: { tenantId: id } }),
+      prisma.contact.deleteMany({ where: { tenantId: id } }),
+      prisma.tenant.delete({ where: { id } }),
+    ]);
+
+    logger.info({ id }, 'Tenant and all related data deleted');
   }
 }
 

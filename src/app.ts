@@ -100,10 +100,12 @@ export async function buildApp() {
       checks.evolution = 'skipped';
     }
 
+    // Database is required; Redis and Evolution are optional services
+    const coreOk = checks.database === 'ok' || checks.database === 'skipped';
     const allOk = Object.values(checks).every((v) => v === 'ok' || v === 'skipped');
-    const status = allOk ? 'ready' : 'degraded';
+    const status = !coreOk ? 'degraded' : allOk ? 'ready' : 'ready_with_warnings';
 
-    return reply.code(allOk ? 200 : 503).send({
+    return reply.code(coreOk ? 200 : 503).send({
       status,
       checks,
       evolutionInstances: evolutionInstanceCount,

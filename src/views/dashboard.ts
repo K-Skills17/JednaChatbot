@@ -450,11 +450,12 @@ export function dashboardHtml(): string {
     fetch('/health/ready').then(function(r) { return r.json(); }).then(function(data) {
       renderHealthGrid('overview-health', data.checks || {});
       var el = document.getElementById('stat-status');
-      el.textContent = data.status === 'ready' ? 'Healthy' : 'Degraded';
-      el.style.color = data.status === 'ready' ? 'var(--green)' : 'var(--yellow)';
+      var isOk = data.status === 'ready' || data.status === 'ready_with_warnings';
+      el.textContent = data.status === 'ready' ? 'Healthy' : isOk ? 'Online (warnings)' : 'Degraded';
+      el.style.color = data.status === 'ready' ? 'var(--green)' : isOk ? 'var(--yellow)' : 'var(--red)';
       var dot = document.getElementById('sidebar-status');
-      dot.className = 'status-dot ' + (data.status === 'ready' ? 'ok' : 'warn');
-      document.getElementById('sidebar-status-text').textContent = data.status === 'ready' ? 'System Online' : 'Degraded';
+      dot.className = 'status-dot ' + (isOk ? 'ok' : 'warn');
+      document.getElementById('sidebar-status-text').textContent = isOk ? 'System Online' : 'Degraded';
     }).catch(function() {});
 
     fetch('/health').then(function(r) { return r.json(); }).then(function(data) {
@@ -726,8 +727,17 @@ export function dashboardHtml(): string {
   function deleteTenant(id) {
     if (!confirm('Are you sure you want to delete this tenant? This cannot be undone.')) return;
     apiFetch('/api/tenants/' + id, { method: 'DELETE' })
-      .then(function() { loadTenants(); loadOverview(); })
-      .catch(function() { alert('Failed to delete tenant.'); });
+      .then(function(res) {
+        if (res.ok) {
+          loadTenants();
+          loadOverview();
+        } else {
+          return res.json().then(function(data) {
+            alert(data.error || 'Failed to delete tenant.');
+          });
+        }
+      })
+      .catch(function() { alert('Failed to delete tenant. Network error.'); });
   }
 
   // ── Event Listeners (no inline handlers) ──────────
