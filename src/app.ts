@@ -100,23 +100,14 @@ export async function buildApp() {
       checks.redis = 'skipped';
     }
 
-    // Evolution API check
-    let evolutionInstanceCount: number | undefined;
+    // Evolution API check (lightweight — 5s timeout, hits root endpoint)
     if (env.EVOLUTION_API_URL) {
-      try {
-        const instances = await evolutionClient.listInstances();
+      const evoHealth = await evolutionClient.healthCheck();
+      if (evoHealth.ok) {
         checks.evolution = 'ok';
-        evolutionInstanceCount = Array.isArray(instances) ? instances.length : 0;
-      } catch (err: any) {
+      } else {
         checks.evolution = 'error';
-        const detail = err?.response?.status
-          ? `HTTP ${err.response.status}: ${err.response.statusText || err.message}`
-          : err?.code === 'ECONNREFUSED'
-            ? `Connection refused at ${env.EVOLUTION_API_URL}`
-            : err?.code === 'ENOTFOUND'
-              ? `DNS lookup failed for ${env.EVOLUTION_API_URL}`
-              : err?.message ?? 'Unknown Evolution API error';
-        errors.evolution = detail;
+        errors.evolution = `${evoHealth.detail} (URL: ${env.EVOLUTION_API_URL})`;
       }
     } else {
       checks.evolution = 'skipped';
@@ -131,7 +122,6 @@ export async function buildApp() {
       status,
       checks,
       ...(Object.keys(errors).length > 0 ? { errors } : {}),
-      evolutionInstances: evolutionInstanceCount,
       config: {
         webhookUrl: evolutionConfig.webhookUrl,
         evolutionUrl: env.EVOLUTION_API_URL || 'not set',

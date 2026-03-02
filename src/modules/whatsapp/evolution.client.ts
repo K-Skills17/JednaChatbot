@@ -54,6 +54,16 @@ export class EvolutionClient {
 
   // ─── Instance Management ─────────────────────────────────
 
+  /** Quick health check — hits root endpoint with a short timeout */
+  async healthCheck(): Promise<{ ok: boolean; detail?: string }> {
+    try {
+      const { data } = await this.http.get('/', { timeout: 5_000 });
+      return { ok: true, detail: data?.version ?? 'reachable' };
+    } catch (err: any) {
+      return { ok: false, detail: err?.message };
+    }
+  }
+
   /** Create a new WhatsApp instance for a tenant */
   async createInstance(instanceName: string): Promise<EvolutionInstance> {
     const { data } = await this.http.post('/instance/create', {
