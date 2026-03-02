@@ -148,19 +148,8 @@ export class TenantService {
       }
     }
 
-    // Delete child records in dependency order to avoid FK violations
-    await prisma.$transaction([
-      prisma.notification.deleteMany({ where: { tenantId: id } }),
-      prisma.message.deleteMany({ where: { tenantId: id } }),
-      prisma.conversation.deleteMany({ where: { tenantId: id } }),
-      prisma.campaignContact.deleteMany({
-        where: { campaign: { tenantId: id } },
-      }),
-      prisma.campaign.deleteMany({ where: { tenantId: id } }),
-      prisma.booking.deleteMany({ where: { tenantId: id } }),
-      prisma.contact.deleteMany({ where: { tenantId: id } }),
-      prisma.tenant.delete({ where: { id } }),
-    ]);
+    // Database cascade (onDelete: Cascade in schema) handles all child records
+    await prisma.tenant.delete({ where: { id } });
 
     logger.info({ id }, 'Tenant and all related data deleted');
   }

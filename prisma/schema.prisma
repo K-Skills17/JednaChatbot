@@ -52,7 +52,7 @@ model Contact {
   optedOutAt        DateTime? @map("opted_out_at")
   createdAt         DateTime  @default(now()) @map("created_at")
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   conversations Conversation[]
   bookings      Booking[]
   campaignContacts CampaignContact[]
@@ -74,8 +74,8 @@ model Conversation {
   lastMessageAt DateTime? @map("last_message_at")
   closedAt      DateTime? @map("closed_at")
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  contact  Contact   @relation(fields: [contactId], references: [id])
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact  Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@index([tenantId, contactId])
@@ -98,8 +98,8 @@ model Message {
   status             String   @default("sent") // sent, delivered, read, failed
   createdAt          DateTime @default(now()) @map("created_at")
 
-  conversation Conversation @relation(fields: [conversationId], references: [id])
-  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
   @@map("messages")
@@ -120,8 +120,8 @@ model Booking {
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
-  contact Contact @relation(fields: [contactId], references: [id])
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, scheduledAt])
   @@map("bookings")
@@ -144,7 +144,7 @@ model Campaign {
   scheduledStart  DateTime? @map("scheduled_start")
   createdAt       DateTime  @default(now()) @map("created_at")
 
-  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contacts CampaignContact[]
 
   @@index([tenantId, status])
@@ -159,8 +159,8 @@ model CampaignContact {
   sentAt     DateTime? @map("sent_at")
   repliedAt  DateTime? @map("replied_at")
 
-  campaign Campaign @relation(fields: [campaignId], references: [id])
-  contact  Contact  @relation(fields: [contactId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@map("campaign_contacts")
 }
@@ -178,7 +178,7 @@ model Notification {
   sentAt    DateTime? @map("sent_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, type])
   @@map("notifications")

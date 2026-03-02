@@ -20,9 +20,11 @@ export function buildRedisOptions(redisUrl: string) {
     username: parsed.username || undefined,
     password: parsed.password || undefined,
     db: parsed.pathname ? parseInt(parsed.pathname.slice(1), 10) || 0 : 0,
-    ...(useTls ? { tls: {} } : {}),
+    ...(useTls ? { tls: { rejectUnauthorized: false } } : {}),
     maxRetriesPerRequest: null as null, // Required by BullMQ
     enableReadyCheck: false,
+    connectTimeout: 10000, // 10s timeout for Railway cold starts
+    retryStrategy: (times: number) => Math.min(times * 500, 5000),
   };
 }
 

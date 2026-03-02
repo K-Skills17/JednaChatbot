@@ -448,7 +448,7 @@ export function dashboardHtml(): string {
   // ── Overview ──────────────────────────────────────
   function loadOverview() {
     fetch('/health/ready').then(function(r) { return r.json(); }).then(function(data) {
-      renderHealthGrid('overview-health', data.checks || {});
+      renderHealthGrid('overview-health', data.checks || {}, data.errors || {});
       var el = document.getElementById('stat-status');
       var isOk = data.status === 'ready' || data.status === 'ready_with_warnings';
       el.textContent = data.status === 'ready' ? 'Healthy' : isOk ? 'Online (warnings)' : 'Degraded';
@@ -518,15 +518,15 @@ export function dashboardHtml(): string {
           + '<td>' + esc(t.businessName || t.name || '—') + '</td>'
           + '<td>' + esc(t.whatsappNumber || t.phone || '—') + '</td>'
           + '<td><span class="badge ' + planBadge + '">' + esc(plan) + '</span></td>'
-          + '<td><span class="badge ' + (t.active !== false ? 'badge-green' : 'badge-red') + '">' + (t.active !== false ? 'Active' : 'Inactive') + '</span></td>'
+          + '<td><span class="badge ' + (t.status === 'active' ? 'badge-green' : t.status === 'suspended' ? 'badge-red' : 'badge-yellow') + '">' + (t.status === 'active' ? 'Active' : t.status === 'suspended' ? 'Suspended' : 'Onboarding') + '</span></td>'
           + '<td>' + date + '</td></tr>';
       }
       return '<tr>'
         + '<td><strong>' + esc(t.businessName || t.name || '—') + '</strong></td>'
         + '<td>' + esc(t.whatsappNumber || t.phone || '—') + '</td>'
         + '<td><span class="badge ' + planBadge + '">' + esc(plan) + '</span></td>'
-        + '<td><span class="badge ' + (t.whatsappConnected ? 'badge-green' : 'badge-dim') + '">' + (t.whatsappConnected ? 'Connected' : 'Disconnected') + '</span></td>'
-        + '<td>' + esc(t.aiProvider || '—') + '</td>'
+        + '<td><span class="badge ' + (t.status === 'active' ? 'badge-green' : t.status === 'suspended' ? 'badge-red' : 'badge-yellow') + '">' + (t.status === 'active' ? 'Connected' : t.status === 'suspended' ? 'Suspended' : 'Onboarding') + '</span></td>'
+        + '<td>' + esc((t.aiConfig && t.aiConfig.model) || t.aiProvider || 'claude') + '</td>'
         + '<td>' + date + '</td>'
         + '<td>'
         + '<a href="/train/' + t.id + '" target="_blank" style="margin-right:8px">Train</a>'
@@ -633,7 +633,7 @@ export function dashboardHtml(): string {
     ]).then(function(results) {
       var ready = results[0];
       var health = results[1];
-      renderHealthGrid('health-details', ready.checks || {});
+      renderHealthGrid('health-details', ready.checks || {}, ready.errors || {});
       var secs = Math.floor(health.uptime);
       var hrs = Math.floor(secs / 3600);
       var mins = Math.floor((secs % 3600) / 60);
@@ -653,17 +653,21 @@ export function dashboardHtml(): string {
     });
   }
 
-  function renderHealthGrid(containerId, checks) {
+  var healthErrors = {};
+
+  function renderHealthGrid(containerId, checks, errors) {
+    if (errors) healthErrors = errors;
     var icons = { database: '&#128450;', redis: '&#9889;', evolution: '&#128172;' };
     var labels = { database: 'Database', redis: 'Redis', evolution: 'Evolution API' };
     document.getElementById(containerId).innerHTML = Object.entries(checks).map(function(entry) {
       var key = entry[0], val = entry[1];
       var cls = val === 'ok' ? 'ok' : val === 'error' ? 'error' : 'skip';
       var statusText = val === 'ok' ? 'Connected' : val === 'error' ? 'Error' : 'Skipped';
+      var errDetail = (val === 'error' && healthErrors[key]) ? '<div class="health-status" style="color:var(--red);font-size:10px;margin-top:2px;max-width:220px;word-break:break-word">' + esc(healthErrors[key]) + '</div>' : '';
       return '<div class="health-item">'
         + '<div class="health-icon ' + cls + '">' + (icons[key] || '&#9679;') + '</div>'
         + '<div><div class="health-label">' + (labels[key] || key) + '</div>'
-        + '<div class="health-status">' + statusText + '</div></div></div>';
+        + '<div class="health-status">' + statusText + '</div>' + errDetail + '</div></div>';
     }).join('');
   }
 
