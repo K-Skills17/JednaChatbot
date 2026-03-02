@@ -22,6 +22,17 @@ export async function buildApp() {
     trustProxy: true,
   });
 
+  // ─── Allow empty-body JSON requests (e.g. DELETE with Content-Type header) ──
+  app.addHook('preParsing', async (request, _reply, payload) => {
+    if (
+      request.headers['content-type']?.includes('application/json') &&
+      request.headers['content-length'] === '0'
+    ) {
+      request.headers['content-type'] = undefined as any;
+    }
+    return payload;
+  });
+
   // ─── Plugins ──────────────────────────────────────────────
 
   await app.register(cors, {
@@ -60,15 +71,17 @@ export async function buildApp() {
   }));
 
   app.get('/health/ready', async (_request, reply) => {
-    const checks: Record<string, 'ok' | 'error' | 'skipped'> = {};
+    const checks: Record<string, string> = {};
+    const errors: Record<string, string> = {};
 
     // Database check
     if (env.DATABASE_URL) {
       try {
         await prisma.$queryRawUnsafe('SELECT 1');
         checks.database = 'ok';
-      } catch {
+      } catch (err: any) {
         checks.database = 'error';
+        errors.database = err?.message ?? 'Unknown database error';
       }
     } else {
       checks.database = 'skipped';
@@ -79,8 +92,9 @@ export async function buildApp() {
       try {
         await redis.ping();
         checks.redis = 'ok';
-      } catch {
+      } catch (err: any) {
         checks.redis = 'error';
+        errors.redis = err?.message ?? 'Unknown Redis error';
       }
     } else {
       checks.redis = 'skipped';
@@ -92,24 +106,36 @@ export async function buildApp() {
       try {
         const instances = await evolutionClient.listInstances();
         checks.evolution = 'ok';
-        evolutionInstanceCount = instances?.length ?? 0;
-      } catch {
+        evolutionInstanceCount = Array.isArray(instances) ? instances.length : 0;
+      } catch (err: any) {
         checks.evolution = 'error';
+        const detail = err?.response?.status
+          ? `HTTP ${err.response.status}: ${err.response.statusText || err.message}`
+          : err?.code === 'ECONNREFUSED'
+            ? `Connection refused at ${env.EVOLUTION_API_URL}`
+            : err?.code === 'ENOTFOUND'
+              ? `DNS lookup failed for ${env.EVOLUTION_API_URL}`
+              : err?.message ?? 'Unknown Evolution API error';
+        errors.evolution = detail;
       }
     } else {
       checks.evolution = 'skipped';
     }
 
+    // Database is required; Redis and Evolution are optional services
+    const coreOk = checks.database === 'ok' || checks.database === 'skipped';
     const allOk = Object.values(checks).every((v) => v === 'ok' || v === 'skipped');
-    const status = allOk ? 'ready' : 'degraded';
+    const status = !coreOk ? 'degraded' : allOk ? 'ready' : 'ready_with_warnings';
 
-    return reply.code(allOk ? 200 : 503).send({
+    return reply.code(coreOk ? 200 : 503).send({
       status,
       checks,
+      ...(Object.keys(errors).length > 0 ? { errors } : {}),
       evolutionInstances: evolutionInstanceCount,
       config: {
         webhookUrl: evolutionConfig.webhookUrl,
         evolutionUrl: env.EVOLUTION_API_URL || 'not set',
+        redisUrl: env.REDIS_URL ? env.REDIS_URL.replace(/\/\/.*@/, '//***@') : 'not set',
         aiProvider: env.AI_PRIMARY_PROVIDER,
       },
     });

@@ -52,6 +52,18 @@ async function main() {
   logger.info(`Environment: ${env.NODE_ENV}`);
   logger.info(`Webhook URL: ${env.WEBHOOK_BASE_URL}/webhook/evolution`);
 
+  // ─── Config diagnostics (visible in Railway logs) ──────────
+  logger.info({
+    DATABASE_URL: env.DATABASE_URL ? `set (${env.DATABASE_URL.split('@')[1]?.split('/')[0] ?? 'configured'})` : 'NOT SET',
+    REDIS_URL: env.REDIS_URL ? `set (${env.REDIS_URL.split('@')[1]?.split('/')[0] ?? 'configured'})` : 'NOT SET',
+    EVOLUTION_API_URL: env.EVOLUTION_API_URL || 'NOT SET',
+    EVOLUTION_API_KEY: env.EVOLUTION_API_KEY ? 'set' : 'NOT SET',
+    ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ? 'set' : 'NOT SET',
+    WEBHOOK_BASE_URL: env.WEBHOOK_BASE_URL,
+    AI_PRIMARY_PROVIDER: env.AI_PRIMARY_PROVIDER,
+    AI_PRIMARY_MODEL: env.AI_PRIMARY_MODEL,
+  }, 'Railway config status');
+
   // Graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
   for (const signal of signals) {

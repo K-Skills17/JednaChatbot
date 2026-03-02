@@ -76,8 +76,16 @@ export function registerTenantRoutes(app: FastifyInstance): void {
   app.delete(
     '/api/tenants/:tenantId',
     async (request: FastifyRequest<{ Params: { tenantId: string } }>, reply: FastifyReply) => {
-      await tenantService.delete(request.params.tenantId);
-      return reply.code(204).send();
+      try {
+        await tenantService.delete(request.params.tenantId);
+        return reply.code(204).send();
+      } catch (err: any) {
+        const message = err?.message ?? 'Failed to delete tenant';
+        if (message.includes('Tenant not found')) {
+          return reply.code(404).send({ error: message });
+        }
+        throw err;
+      }
     },
   );
 

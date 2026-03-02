@@ -135,7 +135,7 @@ export class TenantService {
     return { webhookUrl: evolutionConfig.webhookUrl, instanceName: tenant.evolutionInstanceId };
   }
 
-  /** Delete a tenant and its Evolution instance */
+  /** Delete a tenant and all its related data */
   async delete(id: string) {
     const tenant = await prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new Error('Tenant not found');
@@ -148,8 +148,10 @@ export class TenantService {
       }
     }
 
+    // Database cascade (onDelete: Cascade in schema) handles all child records
     await prisma.tenant.delete({ where: { id } });
-    logger.info({ id }, 'Tenant deleted');
+
+    logger.info({ id }, 'Tenant and all related data deleted');
   }
 }
 
