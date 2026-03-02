@@ -456,7 +456,15 @@ export function dashboardHtml(): string {
       var dot = document.getElementById('sidebar-status');
       dot.className = 'status-dot ' + (isOk ? 'ok' : 'warn');
       document.getElementById('sidebar-status-text').textContent = isOk ? 'System Online' : 'Degraded';
-    }).catch(function() {});
+    }).catch(function(err) {
+      renderHealthGrid('overview-health',
+        { database: 'error', redis: 'error', evolution: 'error' },
+        { database: 'Health check request failed: ' + (err && err.message ? err.message : 'network error') }
+      );
+      var dot = document.getElementById('sidebar-status');
+      dot.className = 'status-dot error';
+      document.getElementById('sidebar-status-text').textContent = 'Unreachable';
+    });
 
     fetch('/health').then(function(r) { return r.json(); }).then(function(data) {
       var secs = Math.floor(data.uptime);
@@ -648,8 +656,11 @@ export function dashboardHtml(): string {
       document.getElementById('health-info-body').innerHTML = rows.map(function(r) {
         return '<tr><td style="color:var(--text-dim);width:180px">' + r[0] + '</td><td>' + esc(String(r[1])) + '</td></tr>';
       }).join('');
-    }).catch(function() {
-      document.getElementById('health-details').innerHTML = '<div class="empty-state">Failed to load health data.</div>';
+    }).catch(function(err) {
+      renderHealthGrid('health-details',
+        { database: 'error', redis: 'error', evolution: 'error' },
+        { database: 'Health check request failed: ' + (err && err.message ? err.message : 'network error') }
+      );
     });
   }
 

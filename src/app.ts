@@ -87,10 +87,18 @@ export async function buildApp() {
       checks.database = 'skipped';
     }
 
-    // Redis check
+    // Redis check — must race against a hard timeout because ioredis has
+    // maxRetriesPerRequest:null (required by BullMQ) which means ping()
+    // retries forever and never rejects if Redis is unreachable, which would
+    // hang this handler forever and make the health grid disappear.
     if (env.REDIS_URL) {
       try {
-        await redis.ping();
+        await Promise.race([
+          redis.ping(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Redis ping timeout (3s) — check REDIS_URL')), 3000),
+          ),
+        ]);
         checks.redis = 'ok';
       } catch (err: any) {
         checks.redis = 'error';

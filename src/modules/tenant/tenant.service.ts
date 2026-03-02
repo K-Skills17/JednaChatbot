@@ -140,16 +140,30 @@ export class TenantService {
     const tenant = await prisma.tenant.findUnique({ where: { id } });
     if (!tenant) throw new Error('Tenant not found');
 
+    // Best-effort: remove Evolution API instance. Short timeout so an
+    // unreachable Evolution API doesn't block the entire delete.
     if (tenant.evolutionInstanceId) {
       try {
         await evolutionClient.deleteInstance(tenant.evolutionInstanceId);
       } catch (err) {
-        logger.warn({ err, id }, 'Failed to delete Evolution instance');
+        logger.warn({ err, id }, 'Failed to delete Evolution instance (non-fatal)');
       }
     }
 
-    // Database cascade (onDelete: Cascade in schema) handles all child records
-    await prisma.tenant.delete({ where: { id } });
+    // Explicit sequential cascade inside an interactive transaction.
+    // Cannot rely on DB-level CASCADE alone: prisma db push runs in the
+    // background at container start and may not have applied the new FK
+    // constraints before the first delete request arrives.
+    await prisma.$transaction(async (tx) => {
+      await tx.notification.deleteMany({ where: { tenantId: id } });
+      await tx.message.deleteMany({ where: { tenantId: id } });
+      await tx.conversation.deleteMany({ where: { tenantId: id } });
+      await tx.campaignContact.deleteMany({ where: { campaign: { tenantId: id } } });
+      await tx.campaign.deleteMany({ where: { tenantId: id } });
+      await tx.booking.deleteMany({ where: { tenantId: id } });
+      await tx.contact.deleteMany({ where: { tenantId: id } });
+      await tx.tenant.delete({ where: { id } });
+    });
 
     logger.info({ id }, 'Tenant and all related data deleted');
   }
