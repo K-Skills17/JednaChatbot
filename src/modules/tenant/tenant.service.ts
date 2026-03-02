@@ -13,6 +13,12 @@ export class TenantService {
       throw new Error(`Invalid Brazilian phone number: ${input.whatsappNumber}`);
     }
 
+    // Prevent duplicate tenants with the same phone number
+    const existing = await prisma.tenant.findUnique({ where: { whatsappNumber: normalizedPhone } });
+    if (existing) {
+      throw new Error(`A tenant with phone number ${normalizedPhone} already exists (${existing.businessName})`);
+    }
+
     // Generate a unique instance name
     const instanceName = `lk-${input.businessName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
 
