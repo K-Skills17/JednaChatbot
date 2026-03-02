@@ -401,7 +401,9 @@ export function dashboardHtml(): string {
 
   function apiFetch(path, opts) {
     opts = opts || {};
-    opts.headers = Object.assign({ 'Content-Type': 'application/json', 'x-api-key': API_KEY }, opts.headers || {});
+    var headers = { 'x-api-key': API_KEY };
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    opts.headers = Object.assign(headers, opts.headers || {});
     return fetch(path, opts);
   }
 

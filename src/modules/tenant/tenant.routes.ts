@@ -24,6 +24,9 @@ export function registerTenantRoutes(app: FastifyInstance): void {
         if (message.includes('Invalid Brazilian phone number')) {
           return reply.code(400).send({ error: message });
         }
+        if (message.includes('already exists')) {
+          return reply.code(409).send({ error: message });
+        }
         throw err;
       }
     },
