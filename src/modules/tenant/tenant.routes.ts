@@ -16,8 +16,16 @@ export function registerTenantRoutes(app: FastifyInstance): void {
         return reply.code(400).send({ error: 'Validation failed', details: parsed.error.flatten() });
       }
 
-      const tenant = await tenantService.create(parsed.data);
-      return reply.code(201).send(tenant);
+      try {
+        const tenant = await tenantService.create(parsed.data);
+        return reply.code(201).send(tenant);
+      } catch (err: any) {
+        const message = err?.message ?? 'Failed to create tenant';
+        if (message.includes('Invalid Brazilian phone number')) {
+          return reply.code(400).send({ error: message });
+        }
+        throw err;
+      }
     },
   );
 
@@ -51,8 +59,16 @@ export function registerTenantRoutes(app: FastifyInstance): void {
         return reply.code(400).send({ error: 'Validation failed', details: parsed.error.flatten() });
       }
 
-      const tenant = await tenantService.update(request.params.tenantId, parsed.data);
-      return reply.send(tenant);
+      try {
+        const tenant = await tenantService.update(request.params.tenantId, parsed.data);
+        return reply.send(tenant);
+      } catch (err: any) {
+        const message = err?.message ?? 'Failed to update tenant';
+        if (message.includes('Invalid Brazilian phone number')) {
+          return reply.code(400).send({ error: message });
+        }
+        throw err;
+      }
     },
   );
 
