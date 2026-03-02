@@ -48,7 +48,7 @@ export class EvolutionClient {
         apikey: evolutionConfig.apiKey,
         'Content-Type': 'application/json',
       },
-      timeout: 30_000,
+      timeout: 10_000,
     });
   }
 
@@ -107,9 +107,9 @@ export class EvolutionClient {
     logger.info({ instanceName }, 'Evolution instance logged out');
   }
 
-  /** Delete instance entirely */
+  /** Delete instance entirely — short timeout so caller is not blocked if Evolution is unreachable */
   async deleteInstance(instanceName: string): Promise<void> {
-    await this.http.delete(`/instance/delete/${instanceName}`);
+    await this.http.delete(`/instance/delete/${instanceName}`, { timeout: 5_000 });
     logger.info({ instanceName }, 'Evolution instance deleted');
   }
 
