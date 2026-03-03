@@ -21,6 +21,9 @@ model Tenant {
   notificationConfig  Json?    @map("notification_config")
   status              String   @default("onboarding") // onboarding, active, suspended
   plan                String   @default("starter")    // starter, pro, enterprise
+  monthlyAiCostUsd    Float    @default(0) @map("monthly_ai_cost_usd")
+  aiCostLimitUsd      Float?   @map("ai_cost_limit_usd")
+  costResetMonth      String?  @map("cost_reset_month") // YYYY-MM format
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -95,6 +98,7 @@ model Message {
   whatsappMessageId  String?  @map("whatsapp_message_id")
   aiModelUsed        String?  @map("ai_model_used")
   aiTokensUsed       Int?     @map("ai_tokens_used")
+  aiCostUsd          Float?   @map("ai_cost_usd")
   status             String   @default("sent") // sent, delivered, read, failed
   createdAt          DateTime @default(now()) @map("created_at")
 

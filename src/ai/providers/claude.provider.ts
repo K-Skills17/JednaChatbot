@@ -13,16 +13,19 @@ export class ClaudeProvider implements AiProvider {
   }
 
   async chat(request: AiChatRequest): Promise<AiChatResponse> {
-    const response = await this.client.messages.create({
-      model: request.model,
-      max_tokens: request.maxTokens ?? 1024,
-      temperature: request.temperature,
-      system: request.systemPrompt,
-      messages: request.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    });
+    const response = await this.client.messages.create(
+      {
+        model: request.model,
+        max_tokens: request.maxTokens ?? 1024,
+        temperature: request.temperature,
+        system: request.systemPrompt,
+        messages: request.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      },
+      { timeout: 30_000 },
+    );
 
     const text = response.content
       .filter((block): block is Anthropic.TextBlock => block.type === 'text')

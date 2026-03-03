@@ -13,18 +13,21 @@ export class OpenAiProvider implements AiProvider {
   }
 
   async chat(request: AiChatRequest): Promise<AiChatResponse> {
-    const response = await this.client.chat.completions.create({
-      model: request.model,
-      max_tokens: request.maxTokens ?? 1024,
-      temperature: request.temperature,
-      messages: [
-        { role: 'system' as const, content: request.systemPrompt },
-        ...request.messages.map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })),
-      ],
-    });
+    const response = await this.client.chat.completions.create(
+      {
+        model: request.model,
+        max_tokens: request.maxTokens ?? 1024,
+        temperature: request.temperature,
+        messages: [
+          { role: 'system' as const, content: request.systemPrompt },
+          ...request.messages.map((m) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+          })),
+        ],
+      },
+      { timeout: 30_000 },
+    );
 
     const text = response.choices[0]?.message?.content ?? '';
     const usage = response.usage;

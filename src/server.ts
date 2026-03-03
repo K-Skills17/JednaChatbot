@@ -8,6 +8,7 @@ import {
   startCampaignWorker,
   startCampaignScheduler,
   startNotificationWorker,
+  stopAllWorkers,
 } from './jobs/queue.setup';
 import { logger } from './utils/logger';
 
@@ -70,6 +71,7 @@ async function main() {
     process.on(signal, async () => {
       logger.info({ signal }, 'Shutting down gracefully...');
       await app.close();
+      await stopAllWorkers();
       await disconnectDatabase();
       await disconnectRedis();
       process.exit(0);

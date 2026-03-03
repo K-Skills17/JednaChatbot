@@ -55,20 +55,22 @@ export function registerTrainingRoutes(app: FastifyInstance): void {
       const { tenantId } = request.params as { tenantId: string };
       const body = request.body as Record<string, any>;
 
-      // Build aiConfig from training payload
-      const aiConfig: Record<string, any> = {};
+      // Load existing config so partial updates don't erase other fields
+      const existing = await tenantService.getById(tenantId);
+      const existingConfig = (existing?.aiConfig as Record<string, any>) ?? {};
+      const aiConfig: Record<string, any> = { ...existingConfig };
 
-      if (body.businessDescription) aiConfig.businessDescription = body.businessDescription;
-      if (body.targetAudience) aiConfig.targetAudience = body.targetAudience;
-      if (body.tone) aiConfig.tone = body.tone;
-      if (body.greeting) aiConfig.greeting = body.greeting;
-      if (body.closingMessage) aiConfig.closingMessage = body.closingMessage;
-      if (body.escalationRules) aiConfig.escalationRules = body.escalationRules;
-      if (body.services) aiConfig.services = body.services;
-      if (body.faq) aiConfig.faq = body.faq;
-      if (body.qualificationCriteria) aiConfig.qualificationCriteria = body.qualificationCriteria;
-      if (body.forbiddenTopics) aiConfig.forbiddenTopics = body.forbiddenTopics;
-      if (body.systemPrompt) aiConfig.systemPrompt = body.systemPrompt;
+      if (body.businessDescription !== undefined) aiConfig.businessDescription = body.businessDescription;
+      if (body.targetAudience !== undefined) aiConfig.targetAudience = body.targetAudience;
+      if (body.tone !== undefined) aiConfig.tone = body.tone;
+      if (body.greeting !== undefined) aiConfig.greeting = body.greeting;
+      if (body.closingMessage !== undefined) aiConfig.closingMessage = body.closingMessage;
+      if (body.escalationRules !== undefined) aiConfig.escalationRules = body.escalationRules;
+      if (body.services !== undefined) aiConfig.services = body.services;
+      if (body.faq !== undefined) aiConfig.faq = body.faq;
+      if (body.qualificationCriteria !== undefined) aiConfig.qualificationCriteria = body.qualificationCriteria;
+      if (body.forbiddenTopics !== undefined) aiConfig.forbiddenTopics = body.forbiddenTopics;
+      if (body.systemPrompt !== undefined) aiConfig.systemPrompt = body.systemPrompt;
 
       const tenant = await tenantService.update(tenantId, { aiConfig: aiConfig as any });
       return reply.send({ success: true, tenant });
