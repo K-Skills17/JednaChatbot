@@ -144,7 +144,17 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     }
   }
 
-  // Store inbound message
+  // Store inbound message (deduplicate by whatsappMessageId)
+  const existingMessage = await prisma.message.findFirst({
+    where: { whatsappMessageId: data.key.id },
+    select: { id: true },
+  });
+
+  if (existingMessage) {
+    logger.debug({ whatsappMessageId: data.key.id }, 'Duplicate message ignored');
+    return;
+  }
+
   await prisma.message.create({
     data: {
       conversationId: conversation.id,
@@ -162,7 +172,7 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     data: { lastMessageAt: new Date() },
   });
 
-  // Queue for AI processing (Phase 2 will implement the processor)
+  // Queue for AI processing with retry config
   await getMessageQueue().add('process-message', {
     tenantId: tenant.id,
     contactId: contact.id,
@@ -171,6 +181,9 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     text,
     messageType,
     senderName,
+  }, {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2000 },
   });
 
   logger.info(

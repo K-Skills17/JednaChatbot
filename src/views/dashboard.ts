@@ -125,6 +125,20 @@ export function dashboardHtml(): string {
     .btn-sm { padding: 6px 14px; font-size: 12px; }
     .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
     .btn-outline:hover { border-color: var(--accent); color: var(--accent-light); }
+    .btn-danger { background: var(--red); }
+    .btn-danger:hover { opacity: 0.9; }
+    .btn-green { background: var(--green); }
+    .btn-green:hover { opacity: 0.9; }
+
+    /* Action links in table */
+    .action-link { cursor: pointer; font-size: 12px; margin-right: 6px; white-space: nowrap; }
+    .action-link:hover { text-decoration: underline; }
+
+    /* QR code display */
+    .qr-container { text-align: center; padding: 16px 0; }
+    .qr-container img { max-width: 260px; border-radius: 8px; border: 1px solid var(--border); }
+    .qr-status { text-align: center; padding: 12px 0; font-size: 13px; }
+    .qr-status .status-icon { font-size: 40px; margin-bottom: 8px; display: block; }
 
     /* Cards */
     .cards {
@@ -368,6 +382,32 @@ export function dashboardHtml(): string {
   </main>
 </div>
 
+<!-- DELETE CONFIRMATION MODAL -->
+<div class="modal-overlay" id="delete-tenant-modal">
+  <div class="modal" style="max-width:400px">
+    <h3 style="color:var(--red)">Delete Tenant</h3>
+    <p style="font-size:14px;color:var(--text-dim);margin-bottom:8px">Are you sure you want to delete <strong id="del-tenant-name" style="color:var(--text)"></strong>?</p>
+    <p style="font-size:13px;color:var(--text-dim)">This will permanently remove the tenant, all conversations, contacts, bookings, campaigns, and the WhatsApp connection. This cannot be undone.</p>
+    <div id="del-error" style="color:var(--red);font-size:13px;display:none;margin-top:12px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-outline" id="btn-cancel-delete">Cancel</button>
+      <button class="btn btn-sm btn-danger" id="btn-confirm-delete">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- WHATSAPP CONNECT MODAL -->
+<div class="modal-overlay" id="whatsapp-modal">
+  <div class="modal" style="max-width:420px">
+    <h3 id="wa-modal-title">Connect WhatsApp</h3>
+    <div id="wa-modal-content"><div style="text-align:center;padding:24px"><div class="spinner"></div></div></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-outline" id="btn-close-wa">Close</button>
+      <button class="btn btn-sm" id="btn-check-wa-status" style="display:none">Check Status</button>
+    </div>
+  </div>
+</div>
+
 <!-- NEW TENANT MODAL -->
 <div class="modal-overlay" id="new-tenant-modal">
   <div class="modal">
@@ -531,16 +571,20 @@ export function dashboardHtml(): string {
           + '<td><span class="badge ' + (t.status === 'active' ? 'badge-green' : t.status === 'suspended' ? 'badge-red' : 'badge-yellow') + '">' + (t.status === 'active' ? 'Active' : t.status === 'suspended' ? 'Suspended' : 'Onboarding') + '</span></td>'
           + '<td>' + date + '</td></tr>';
       }
+      var waStatus = t.status === 'active' ? 'badge-green' : t.status === 'suspended' ? 'badge-red' : 'badge-yellow';
+      var waLabel = t.status === 'active' ? 'Connected' : t.status === 'suspended' ? 'Suspended' : 'Onboarding';
       return '<tr>'
         + '<td><strong>' + esc(t.businessName || t.name || '—') + '</strong></td>'
         + '<td>' + esc(t.whatsappNumber || t.phone || '—') + '</td>'
         + '<td><span class="badge ' + planBadge + '">' + esc(plan) + '</span></td>'
-        + '<td><span class="badge ' + (t.status === 'active' ? 'badge-green' : t.status === 'suspended' ? 'badge-red' : 'badge-yellow') + '">' + (t.status === 'active' ? 'Connected' : t.status === 'suspended' ? 'Suspended' : 'Onboarding') + '</span></td>'
+        + '<td><span class="badge ' + waStatus + '">' + waLabel + '</span></td>'
         + '<td>' + esc((t.aiConfig && t.aiConfig.model) || t.aiProvider || 'claude') + '</td>'
         + '<td>' + date + '</td>'
         + '<td>'
-        + '<a href="/train/' + t.id + '" target="_blank" style="margin-right:8px">Train</a>'
-        + '<a href="#" data-delete-tenant="' + t.id + '" style="color:var(--red)">Delete</a>'
+        + '<a href="#" class="action-link" data-connect-tenant="' + t.id + '" style="color:var(--green)">Connect</a>'
+        + '<a href="#" class="action-link" data-status-tenant="' + t.id + '" style="color:var(--blue)">Status</a>'
+        + '<a href="/train/' + t.id + '" target="_blank" class="action-link">Train</a>'
+        + '<a href="#" class="action-link" data-delete-tenant="' + t.id + '" data-tenant-name="' + esc(t.businessName || t.name || '—') + '" style="color:var(--red)">Delete</a>'
         + '</td></tr>';
     }).join('');
   }
@@ -741,20 +785,128 @@ export function dashboardHtml(): string {
     });
   }
 
-  function deleteTenant(id) {
-    if (!confirm('Are you sure you want to delete this tenant? This cannot be undone.')) return;
-    apiFetch('/api/tenants/' + id, { method: 'DELETE' })
+  // ── Delete Modal ─────────────────────────────────
+  var pendingDeleteId = null;
+
+  function openDeleteModal(id, name) {
+    pendingDeleteId = id;
+    document.getElementById('del-tenant-name').textContent = name || id;
+    document.getElementById('del-error').style.display = 'none';
+    document.getElementById('btn-confirm-delete').disabled = false;
+    document.getElementById('btn-confirm-delete').textContent = 'Delete';
+    document.getElementById('delete-tenant-modal').classList.add('open');
+  }
+
+  function closeDeleteModal() {
+    pendingDeleteId = null;
+    document.getElementById('delete-tenant-modal').classList.remove('open');
+  }
+
+  function confirmDelete() {
+    if (!pendingDeleteId) return;
+    var btn = document.getElementById('btn-confirm-delete');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+    document.getElementById('del-error').style.display = 'none';
+    apiFetch('/api/tenants/' + pendingDeleteId, { method: 'DELETE' })
       .then(function(res) {
         if (res.ok) {
+          closeDeleteModal();
           loadTenants();
           loadOverview();
         } else {
           return res.json().then(function(data) {
-            alert(data.error || 'Failed to delete tenant.');
+            var err = document.getElementById('del-error');
+            err.textContent = data.error || 'Failed to delete tenant.';
+            err.style.display = 'block';
           });
         }
       })
-      .catch(function() { alert('Failed to delete tenant. Network error.'); });
+      .catch(function() {
+        var err = document.getElementById('del-error');
+        err.textContent = 'Network error. Try again.';
+        err.style.display = 'block';
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.textContent = 'Delete';
+      });
+  }
+
+  // ── WhatsApp Connect / Status Modal ─────────────
+  var activeWaTenantId = null;
+
+  function closeWaModal() {
+    activeWaTenantId = null;
+    document.getElementById('whatsapp-modal').classList.remove('open');
+  }
+
+  function connectWhatsApp(tenantId) {
+    activeWaTenantId = tenantId;
+    document.getElementById('wa-modal-title').textContent = 'Connect WhatsApp';
+    document.getElementById('wa-modal-content').innerHTML = '<div style="text-align:center;padding:24px"><div class="spinner"></div><p style="color:var(--text-dim);margin-top:12px;font-size:13px">Generating QR code...</p></div>';
+    document.getElementById('btn-check-wa-status').style.display = 'inline-block';
+    document.getElementById('whatsapp-modal').classList.add('open');
+
+    apiFetch('/api/tenants/' + tenantId + '/connect', { method: 'POST', body: JSON.stringify({}) })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.base64) {
+          document.getElementById('wa-modal-content').innerHTML =
+            '<div class="qr-container">'
+            + '<p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">Scan this QR code with WhatsApp on your phone</p>'
+            + '<img src="' + data.base64 + '" alt="QR Code" />'
+            + '<p style="color:var(--text-dim);font-size:12px;margin-top:12px">Open WhatsApp &gt; Linked Devices &gt; Link a Device</p>'
+            + '</div>';
+        } else if (data.code) {
+          document.getElementById('wa-modal-content').innerHTML =
+            '<div class="qr-container">'
+            + '<p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">Scan this QR code with WhatsApp</p>'
+            + '<pre style="background:var(--bg);padding:16px;border-radius:8px;overflow:auto;font-size:11px">' + esc(data.code) + '</pre>'
+            + '</div>';
+        } else {
+          document.getElementById('wa-modal-content').innerHTML =
+            '<div class="qr-status"><span class="status-icon" style="color:var(--green)">&#10003;</span><p>Instance may already be connected. Click <strong>Check Status</strong> to verify.</p></div>';
+        }
+      })
+      .catch(function(err) {
+        document.getElementById('wa-modal-content').innerHTML =
+          '<div class="qr-status"><span class="status-icon" style="color:var(--red)">&#10007;</span><p style="color:var(--red)">Failed to generate QR code.<br><span style="font-size:12px;color:var(--text-dim)">' + esc(err.message || 'Network error') + '</span></p></div>';
+      });
+  }
+
+  function checkWhatsAppStatus(tenantId) {
+    tenantId = tenantId || activeWaTenantId;
+    if (!tenantId) return;
+    activeWaTenantId = tenantId;
+    document.getElementById('wa-modal-title').textContent = 'WhatsApp Status';
+    document.getElementById('wa-modal-content').innerHTML = '<div style="text-align:center;padding:24px"><div class="spinner"></div><p style="color:var(--text-dim);margin-top:12px;font-size:13px">Checking connection...</p></div>';
+    document.getElementById('btn-check-wa-status').style.display = 'inline-block';
+    document.getElementById('whatsapp-modal').classList.add('open');
+
+    apiFetch('/api/tenants/' + tenantId + '/status')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        var state = data.state || data.status || 'unknown';
+        var isConnected = state === 'open' || state === 'connected';
+        var icon = isConnected ? '&#10003;' : '&#9888;';
+        var iconColor = isConnected ? 'var(--green)' : 'var(--yellow)';
+        var label = isConnected ? 'Connected' : state === 'close' || state === 'disconnected' ? 'Disconnected' : state;
+        var msg = isConnected
+          ? 'WhatsApp is connected and ready to receive messages. The tenant has been activated.'
+          : 'WhatsApp is not connected. Use <strong>Connect</strong> to scan a QR code.';
+        document.getElementById('wa-modal-content').innerHTML =
+          '<div class="qr-status">'
+          + '<span class="status-icon" style="color:' + iconColor + '">' + icon + '</span>'
+          + '<p><span class="badge ' + (isConnected ? 'badge-green' : 'badge-yellow') + '" style="font-size:13px;padding:4px 14px;margin-bottom:8px;display:inline-block">' + label + '</span></p>'
+          + '<p style="color:var(--text-dim);font-size:13px;margin-top:8px">' + msg + '</p>'
+          + '</div>';
+        if (isConnected) loadTenants();
+      })
+      .catch(function(err) {
+        document.getElementById('wa-modal-content').innerHTML =
+          '<div class="qr-status"><span class="status-icon" style="color:var(--red)">&#10007;</span><p style="color:var(--red)">Failed to check status.<br><span style="font-size:12px;color:var(--text-dim)">' + esc(err.message || 'Network error') + '</span></p></div>';
+      });
   }
 
   // ── Event Listeners (no inline handlers) ──────────
@@ -779,13 +931,30 @@ export function dashboardHtml(): string {
   document.getElementById('btn-new-campaign').addEventListener('click', openNewCampaignModal);
   document.getElementById('btn-cancel-campaign').addEventListener('click', closeNewCampaignModal);
   document.getElementById('btn-create-campaign').addEventListener('click', createCampaign);
+  document.getElementById('btn-cancel-delete').addEventListener('click', closeDeleteModal);
+  document.getElementById('btn-confirm-delete').addEventListener('click', confirmDelete);
+  document.getElementById('btn-close-wa').addEventListener('click', closeWaModal);
+  document.getElementById('btn-check-wa-status').addEventListener('click', function() { checkWhatsAppStatus(); });
 
-  // Delegate clicks for dynamically-rendered delete links
+  // Delegate clicks for dynamically-rendered action links
   document.addEventListener('click', function(e) {
-    var target = e.target.closest('[data-delete-tenant]');
-    if (target) {
+    var del = e.target.closest('[data-delete-tenant]');
+    if (del) {
       e.preventDefault();
-      deleteTenant(target.getAttribute('data-delete-tenant'));
+      openDeleteModal(del.getAttribute('data-delete-tenant'), del.getAttribute('data-tenant-name'));
+      return;
+    }
+    var conn = e.target.closest('[data-connect-tenant]');
+    if (conn) {
+      e.preventDefault();
+      connectWhatsApp(conn.getAttribute('data-connect-tenant'));
+      return;
+    }
+    var stat = e.target.closest('[data-status-tenant]');
+    if (stat) {
+      e.preventDefault();
+      checkWhatsAppStatus(stat.getAttribute('data-status-tenant'));
+      return;
     }
   });
 

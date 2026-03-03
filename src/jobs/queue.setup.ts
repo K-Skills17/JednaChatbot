@@ -48,6 +48,8 @@ export function getNotificationQueue(): Queue {
 
 // ─── Workers ─────────────────────────────────────────────────
 
+const activeWorkers: Worker[] = [];
+
 export function startMessageWorker(): void {
   const worker = new Worker(
     'message-processing',
@@ -70,6 +72,7 @@ export function startMessageWorker(): void {
     logger.error({ err }, 'Message worker error');
   });
 
+  activeWorkers.push(worker);
   logger.info('Message processing worker started (AI engine)');
 }
 
@@ -92,6 +95,7 @@ export function startReminderWorker(): void {
     logger.error({ err }, 'Reminder worker error');
   });
 
+  activeWorkers.push(worker);
   logger.info('Reminder worker started');
 }
 
@@ -117,6 +121,7 @@ export function startCampaignWorker(): void {
     logger.error({ err }, 'Campaign worker error');
   });
 
+  activeWorkers.push(worker);
   logger.info('Campaign sending worker started');
 }
 
@@ -149,6 +154,7 @@ export async function startCampaignScheduler(): Promise<void> {
     logger.error({ err }, 'Campaign scheduler worker error');
   });
 
+  activeWorkers.push(worker);
   logger.info('Campaign scheduler started (every 5 minutes)');
 }
 
@@ -174,5 +180,14 @@ export function startNotificationWorker(): void {
     logger.error({ err }, 'Notification worker error');
   });
 
+  activeWorkers.push(worker);
   logger.info('Notification worker started');
+}
+
+/** Gracefully stop all workers, waiting for in-flight jobs to finish */
+export async function stopAllWorkers(): Promise<void> {
+  logger.info(`Stopping ${activeWorkers.length} worker(s)...`);
+  await Promise.all(activeWorkers.map((w) => w.close()));
+  activeWorkers.length = 0;
+  logger.info('All workers stopped');
 }
