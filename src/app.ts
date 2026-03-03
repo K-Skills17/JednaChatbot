@@ -141,6 +141,25 @@ export async function buildApp() {
     });
   });
 
+  // ─── Admin password login ────────────────────────────────────────
+  app.post('/api/admin/login', async (request, reply) => {
+    const { password } = request.body as { password?: string };
+
+    if (!env.ADMIN_PASSWORD) {
+      return reply.code(501).send({
+        error: 'Admin password not configured',
+        message: 'Set ADMIN_PASSWORD in your environment variables.',
+      });
+    }
+
+    if (!password || password !== env.ADMIN_PASSWORD) {
+      return reply.code(401).send({ error: 'Invalid password' });
+    }
+
+    // Password valid — return the API key so the dashboard can call protected routes
+    return reply.send({ apiKey: env.API_KEY });
+  });
+
   // ─── Routes (each wrapped in register() for hook encapsulation) ───
 
   app.register(async (instance) => registerWebhookRoutes(instance));

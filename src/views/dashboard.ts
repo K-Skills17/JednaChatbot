@@ -213,12 +213,12 @@ export function dashboardHtml(): string {
 <div id="auth-gate" class="auth-gate">
   <div class="logo-big">LK</div>
   <h2>LK Chatbot Admin</h2>
-  <p>Enter your API key to access the dashboard.</p>
+  <p>Enter admin password to access the dashboard.</p>
   <div class="input-group">
-    <input id="api-key-input" type="password" placeholder="API Key" />
-    <button class="btn" id="btn-connect">Connect</button>
+    <input id="admin-password-input" type="password" placeholder="Admin Password" />
+    <button class="btn" id="btn-connect">Log In</button>
   </div>
-  <div id="auth-error" class="auth-error">Invalid API key. Check and try again.</div>
+  <div id="auth-error" class="auth-error">Invalid password. Check and try again.</div>
 </div>
 
 <!-- DASHBOARD -->
@@ -449,19 +449,23 @@ export function dashboardHtml(): string {
 
   // ── Auth ──────────────────────────────────────────
   function authenticate() {
-    var key = document.getElementById('api-key-input').value.trim();
-    if (!key) return;
-    API_KEY = key;
-    apiFetch('/api/tenants?page=1&limit=1')
+    var pw = document.getElementById('admin-password-input').value.trim();
+    if (!pw) return;
+    fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw })
+    })
       .then(function(res) {
-        if (res.ok) {
-          sessionStorage.setItem('lk_api_key', key);
-          document.getElementById('auth-gate').style.display = 'none';
-          document.getElementById('dashboard').style.display = 'flex';
-          refreshAll();
-        } else {
-          document.getElementById('auth-error').style.display = 'block';
-        }
+        if (!res.ok) throw new Error('Invalid');
+        return res.json();
+      })
+      .then(function(data) {
+        API_KEY = data.apiKey;
+        sessionStorage.setItem('lk_api_key', data.apiKey);
+        document.getElementById('auth-gate').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'flex';
+        refreshAll();
       })
       .catch(function() {
         document.getElementById('auth-error').style.display = 'block';
@@ -912,7 +916,7 @@ export function dashboardHtml(): string {
   // ── Event Listeners (no inline handlers) ──────────
   document.getElementById('btn-connect').addEventListener('click', authenticate);
 
-  document.getElementById('api-key-input').addEventListener('keydown', function(e) {
+  document.getElementById('admin-password-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') authenticate();
   });
 
