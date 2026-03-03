@@ -7,6 +7,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3000),
   API_KEY: z.string().min(1).default('not-set'),
+  ADMIN_PASSWORD: z.string().optional(),
 
   DATABASE_URL: z.string().default(''),
   REDIS_URL: z.string().default(''),
