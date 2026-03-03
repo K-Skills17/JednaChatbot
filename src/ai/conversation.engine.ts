@@ -16,6 +16,13 @@ import {
   ModelTier,
 } from './ai.types';
 
+// ── Plan Limits ──────────────────────────────────────────────
+const PLAN_LIMITS: Record<string, { messagesPerMonth: number | null; aiCostMonthlyUsd: number | null }> = {
+  starter:    { messagesPerMonth: 1000,  aiCostMonthlyUsd: 50 },
+  pro:        { messagesPerMonth: 10000, aiCostMonthlyUsd: 500 },
+  enterprise: { messagesPerMonth: null,  aiCostMonthlyUsd: null }, // unlimited
+};
+
 const DEFAULT_CONTEXT: ConversationContext = {
   state: 'greeting',
   extractedData: {},
@@ -35,6 +42,20 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!tenant || tenant.status !== 'active') {
     logger.warn({ tenantId }, 'Skipping message for inactive/missing tenant');
+    return;
+  }
+
+  // 1b. Check plan limits
+  const limitExceeded = await checkPlanLimits(tenant);
+  if (limitExceeded) {
+    logger.warn({ tenantId, plan: tenant.plan, reason: limitExceeded }, 'Plan limit exceeded');
+    await sendMessage({
+      tenantId,
+      conversationId,
+      instanceName: tenant.evolutionInstanceId!,
+      phone,
+      text: 'Desculpe, nosso limite de atendimentos do mês foi atingido. Por favor, entre em contato novamente em breve ou fale com nossa equipe diretamente.',
+    });
     return;
   }
 
@@ -176,6 +197,9 @@ export async function processMessage(job: MessageJobData): Promise<void> {
 
   // 16. Apply side effects
   await applySideEffects(tenantId, conversationId, contactId, phone, context, action);
+
+  // 17. Increment monthly message counter for plan enforcement
+  await incrementMessageCount(tenantId);
 
   logger.info(
     { phone, model, tokens: aiResponse.totalTokens, state: action.nextState ?? context.state },
@@ -408,6 +432,58 @@ async function trackTenantAiCost(tenantId: string, costUsd: number): Promise<voi
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { monthlyAiCostUsd: { increment: costUsd } },
+    });
+  }
+}
+
+/** Check if the tenant has exceeded their plan limits. Returns a reason string or null. */
+async function checkPlanLimits(tenant: {
+  plan: string;
+  messagesThisMonth: number;
+  messageMonthStart: string | null;
+  monthlyAiCostUsd: number;
+  costResetMonth: string | null;
+}): Promise<string | null> {
+  const limits = PLAN_LIMITS[tenant.plan] ?? PLAN_LIMITS.starter;
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  // Check message limit
+  if (limits.messagesPerMonth !== null) {
+    const count = tenant.messageMonthStart === currentMonth ? tenant.messagesThisMonth : 0;
+    if (count >= limits.messagesPerMonth) {
+      return `messages: ${count}/${limits.messagesPerMonth}`;
+    }
+  }
+
+  // Check AI cost limit
+  if (limits.aiCostMonthlyUsd !== null) {
+    const cost = tenant.costResetMonth === currentMonth ? tenant.monthlyAiCostUsd : 0;
+    if (cost >= limits.aiCostMonthlyUsd) {
+      return `ai_cost: $${cost.toFixed(2)}/$${limits.aiCostMonthlyUsd}`;
+    }
+  }
+
+  return null;
+}
+
+/** Increment the monthly message counter, resetting if the month changed */
+async function incrementMessageCount(tenantId: string): Promise<void> {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { messageMonthStart: true },
+  });
+  if (!tenant) return;
+
+  if (tenant.messageMonthStart !== currentMonth) {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { messagesThisMonth: 1, messageMonthStart: currentMonth },
+    });
+  } else {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { messagesThisMonth: { increment: 1 } },
     });
   }
 }

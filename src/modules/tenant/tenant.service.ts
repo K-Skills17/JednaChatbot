@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { evolutionClient } from '../whatsapp/evolution.client';
 import { evolutionConfig } from '../../config/evolution';
@@ -22,7 +23,8 @@ export class TenantService {
     // Generate a unique instance name
     const instanceName = `lk-${input.businessName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
 
-    // Create tenant in database
+    // Create tenant in database with a unique API key
+    const apiKey = `lk_${crypto.randomBytes(24).toString('hex')}`;
     const tenant = await prisma.tenant.create({
       data: {
         businessName: input.businessName,
@@ -33,6 +35,7 @@ export class TenantService {
         aiConfig: input.aiConfig,
         notificationConfig: input.notificationConfig ?? undefined,
         plan: input.plan,
+        apiKey,
         status: 'onboarding',
       },
     });
