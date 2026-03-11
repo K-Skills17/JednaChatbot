@@ -47,6 +47,9 @@ export function buildSystemPrompt(
 ): string {
   const parts: string[] = [];
 
+  const isAuditLead = context.extractedData?.source === 'audit_tool' ||
+    (context as any).auditReportSent === true;
+
   parts.push(buildIdentity(tenant.businessName, tenant.aiConfig.tone));
 
   // Custom business instructions (free-form prompt from the business owner)
@@ -63,11 +66,19 @@ export function buildSystemPrompt(
   }
 
   parts.push(buildContactContext(contact, context));
-  parts.push(buildStateInstructions(
-    context.state,
-    tenant.aiConfig.qualificationCriteria,
-    tenant.aiConfig.greeting,
-  ));
+
+  // Audit leads get special instructions that reference their report
+  // Keep audit instructions active until the conversation moves to booking/closed
+  if (isAuditLead && context.state !== 'booking' && context.state !== 'closed') {
+    parts.push(buildAuditLeadInstructions(context));
+  } else {
+    parts.push(buildStateInstructions(
+      context.state,
+      tenant.aiConfig.qualificationCriteria,
+      tenant.aiConfig.greeting,
+    ));
+  }
+
   parts.push(RESPONSE_FORMAT);
   parts.push(buildBehavioralRules(tenant.aiConfig));
 
@@ -157,11 +168,48 @@ function buildContactContext(contact: ContactData, context: ConversationContext)
   lines.push(`- Status: ${contact.leadStatus}`);
   lines.push(`- Pontuação: ${contact.leadScore}/100`);
 
+  // Check if this lead came from the audit tool
+  const isAuditLead = context.extractedData?.source === 'audit_tool' ||
+    (context as any).auditReportSent === true;
+
+  if (isAuditLead) {
+    lines.push('- **Origem: Ferramenta de Auditoria** (já recebeu o relatório de auditoria via WhatsApp)');
+
+    if (context.extractedData?.siteUrl) {
+      lines.push(`- Site auditado: ${context.extractedData.siteUrl}`);
+    }
+    if (context.extractedData?.auditScore != null) {
+      lines.push(`- Pontuação da auditoria: ${context.extractedData.auditScore}`);
+    }
+    if (context.extractedData?.auditFindings) {
+      const findings = Array.isArray(context.extractedData.auditFindings)
+        ? context.extractedData.auditFindings
+        : [context.extractedData.auditFindings];
+      lines.push('- Principais achados da auditoria:');
+      for (const finding of findings) {
+        lines.push(`  - ${finding}`);
+      }
+    }
+    if (context.extractedData?.auditRecommendations) {
+      const recs = Array.isArray(context.extractedData.auditRecommendations)
+        ? context.extractedData.auditRecommendations
+        : [context.extractedData.auditRecommendations];
+      lines.push('- Recomendações:');
+      for (const rec of recs) {
+        lines.push(`  - ${rec}`);
+      }
+    }
+  }
+
   if (context.extractedData && Object.keys(context.extractedData).length > 0) {
-    lines.push('- Dados já coletados:');
-    for (const [key, value] of Object.entries(context.extractedData)) {
-      if (key.startsWith('_')) continue; // skip internal fields like _reasoning
-      lines.push(`  - ${key}: ${value}`);
+    const nonAuditData = Object.entries(context.extractedData).filter(
+      ([key]) => !key.startsWith('_') && !['source', 'siteUrl', 'auditScore', 'auditFindings', 'auditRecommendations'].includes(key),
+    );
+    if (nonAuditData.length > 0) {
+      lines.push('- Dados já coletados:');
+      for (const [key, value] of nonAuditData) {
+        lines.push(`  - ${key}: ${value}`);
+      }
     }
   }
 
@@ -201,6 +249,43 @@ Confirme data e horário escolhidos. Mude o estado para "closed" quando o agenda
 A conversa principal foi concluída. Responda a perguntas adicionais de forma breve.
 Se o contato quiser agendar novamente ou tiver nova demanda, mude o estado para "qualifying".`;
   }
+}
+
+/**
+ * Special instructions for leads that came from the audit tool.
+ * Instead of greeting from scratch, the AI should reference the audit report
+ * that was already sent and guide toward booking a consultation.
+ */
+function buildAuditLeadInstructions(context: ConversationContext): string {
+  const score = context.extractedData?.auditScore;
+  const siteUrl = context.extractedData?.siteUrl;
+
+  return `## Fase Atual: Follow-up da Auditoria
+
+REGRAS CRÍTICAS — LEIA COM ATENÇÃO:
+- Este contato JÁ recebeu um relatório de auditoria do site${siteUrl ? ` (${siteUrl})` : ''}${score != null ? ` com nota ${score}/100` : ''}.
+- NÃO cumprimente como se fosse um contato novo.
+- NÃO faça perguntas óbvias que a auditoria já respondeu (ex: "você já tem um site?" — CLARO que tem, nós acabamos de auditar!).
+- NÃO entre em modo de qualificação. O contato já está qualificado — ele fez a auditoria e respondeu.
+- NÃO tente resolver o problema técnico ou dar instruções detalhadas. Esse é o papel do consultor.
+
+SEU ÚNICO OBJETIVO: Levar o contato a agendar uma conversa com um consultor.
+
+Como responder:
+1. Confirme brevemente o item que o contato mencionou (1 frase curta)
+2. Reforce o valor/impacto dessa melhoria com base no relatório (1 frase)
+3. Direcione IMEDIATAMENTE para o agendamento: "Nosso consultor pode te ajudar a implementar isso. Quer agendar uma conversa rápida? Qual o melhor dia e horário pra você?"
+4. Mude nextState para "booking"
+
+Se o contato fizer perguntas sobre o relatório, responda brevemente e SEMPRE volte ao agendamento.
+Se o contato aceitar agendar, colete dia e horário preferidos.
+Se o contato recusar, seja compreensivo e mantenha a porta aberta.
+
+EXEMPLO DE BOA RESPOSTA:
+"Excelente escolha! Ativar WhatsApp + telefone clicável pode aumentar suas conversões em até 40%. Nosso consultor pode implementar isso rapidamente no seu site. Quer agendar uma conversa? Qual dia e horário ficam melhor pra você?"
+
+EXEMPLO DE RESPOSTA RUIM (NÃO FAÇA ISSO):
+"Ótimo! Você já tem um site pronto ou está começando agora?"`;
 }
 
 function buildGreetingInstructions(customGreeting?: string): string {

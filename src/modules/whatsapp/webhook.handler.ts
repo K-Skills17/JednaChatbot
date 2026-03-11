@@ -127,6 +127,20 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
         data: { status: 'active', closedAt: null },
       });
     } else {
+      // Determine initial state: skip greeting if the contact already has context
+      // (e.g. audit tool already sent them a report and set leadStatus to 'qualifying')
+      const hasAuditData = contact.qualificationData &&
+        typeof contact.qualificationData === 'object' &&
+        (contact.qualificationData as Record<string, any>).audit;
+
+      const initialState = contact.leadStatus === 'new' ? 'greeting' : 'qualifying';
+      const initialExtractedData = hasAuditData
+        ? {
+            source: 'audit_tool',
+            ...((contact.qualificationData as Record<string, any>).audit ?? {}),
+          }
+        : {};
+
       // Create a new conversation with proper initial context
       conversation = await prisma.conversation.create({
         data: {
@@ -134,10 +148,11 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
           contactId: contact.id,
           status: 'active',
           context: {
-            state: contact.leadStatus === 'new' ? 'greeting' : 'qualifying',
-            extractedData: {},
+            state: initialState,
+            extractedData: initialExtractedData,
             qualificationComplete: false,
             messageCount: 0,
+            ...(hasAuditData ? { auditReportSent: true } : {}),
           },
         },
       });
