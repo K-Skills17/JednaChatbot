@@ -68,7 +68,8 @@ export function buildSystemPrompt(
   parts.push(buildContactContext(contact, context));
 
   // Audit leads get special instructions that reference their report
-  if (isAuditLead && context.messageCount <= 2) {
+  // Keep audit instructions active until the conversation moves to booking/closed
+  if (isAuditLead && context.state !== 'booking' && context.state !== 'closed') {
     parts.push(buildAuditLeadInstructions(context));
   } else {
     parts.push(buildStateInstructions(
@@ -259,21 +260,32 @@ function buildAuditLeadInstructions(context: ConversationContext): string {
   const score = context.extractedData?.auditScore;
   const siteUrl = context.extractedData?.siteUrl;
 
-  let instructions = `## Fase Atual: Follow-up da Auditoria
-IMPORTANTE: Este contato JÁ recebeu um relatório de auditoria do site${siteUrl ? ` (${siteUrl})` : ''} via WhatsApp.
-NÃO cumprimente como se fosse um contato novo. NÃO reinicie a conversa do zero.
+  return `## Fase Atual: Follow-up da Auditoria
 
-O contato está respondendo ao relatório de auditoria que enviamos. Você deve:
-1. Reconhecer a resposta dele e fazer referência ao relatório de auditoria que foi enviado
-2. Comentar brevemente sobre os resultados da auditoria${score != null ? ` (pontuação: ${score})` : ''} de forma útil
-3. Perguntar se gostaria de agendar uma conversa com um consultor para discutir as melhorias do site
-4. Se o contato aceitar agendar, mude o estado para "booking"
-5. Se tiver dúvidas sobre o relatório, responda com base nos dados da auditoria disponíveis no contexto
+REGRAS CRÍTICAS — LEIA COM ATENÇÃO:
+- Este contato JÁ recebeu um relatório de auditoria do site${siteUrl ? ` (${siteUrl})` : ''}${score != null ? ` com nota ${score}/100` : ''}.
+- NÃO cumprimente como se fosse um contato novo.
+- NÃO faça perguntas óbvias que a auditoria já respondeu (ex: "você já tem um site?" — CLARO que tem, nós acabamos de auditar!).
+- NÃO entre em modo de qualificação. O contato já está qualificado — ele fez a auditoria e respondeu.
+- NÃO tente resolver o problema técnico ou dar instruções detalhadas. Esse é o papel do consultor.
 
-Mantenha o tom consultivo e profissional. Você já tem o contexto do relatório — use-o para dar valor ao contato.
-Após as primeiras interações sobre o relatório, pode transicionar naturalmente para "qualifying" se precisar de mais informações, ou "booking" se o contato quiser agendar.`;
+SEU ÚNICO OBJETIVO: Levar o contato a agendar uma conversa com um consultor.
 
-  return instructions;
+Como responder:
+1. Confirme brevemente o item que o contato mencionou (1 frase curta)
+2. Reforce o valor/impacto dessa melhoria com base no relatório (1 frase)
+3. Direcione IMEDIATAMENTE para o agendamento: "Nosso consultor pode te ajudar a implementar isso. Quer agendar uma conversa rápida? Qual o melhor dia e horário pra você?"
+4. Mude nextState para "booking"
+
+Se o contato fizer perguntas sobre o relatório, responda brevemente e SEMPRE volte ao agendamento.
+Se o contato aceitar agendar, colete dia e horário preferidos.
+Se o contato recusar, seja compreensivo e mantenha a porta aberta.
+
+EXEMPLO DE BOA RESPOSTA:
+"Excelente escolha! Ativar WhatsApp + telefone clicável pode aumentar suas conversões em até 40%. Nosso consultor pode implementar isso rapidamente no seu site. Quer agendar uma conversa? Qual dia e horário ficam melhor pra você?"
+
+EXEMPLO DE RESPOSTA RUIM (NÃO FAÇA ISSO):
+"Ótimo! Você já tem um site pronto ou está começando agora?"`;
 }
 
 function buildGreetingInstructions(customGreeting?: string): string {
