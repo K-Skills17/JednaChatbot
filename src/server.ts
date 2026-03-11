@@ -8,6 +8,7 @@ import {
   startCampaignWorker,
   startCampaignScheduler,
   startNotificationWorker,
+  startDailySummaryScheduler,
   stopAllWorkers,
 } from './jobs/queue.setup';
 import { logger } from './utils/logger';
@@ -42,6 +43,7 @@ async function main() {
       startCampaignWorker();
       await startCampaignScheduler();
       startNotificationWorker();
+      await startDailySummaryScheduler();
     } catch (err) {
       logger.error({ err }, 'Failed to connect services — server running without workers');
     }
