@@ -124,8 +124,11 @@ export class TenantService {
           evolutionConfig.webhookUrl,
         );
         logger.info({ id, webhookUrl: evolutionConfig.webhookUrl }, 'Webhook configured on activation');
-      } catch (err) {
-        logger.warn({ err, id }, 'Failed to configure webhook on activation');
+      } catch (err: any) {
+        logger.warn(
+          { id, webhookUrl: evolutionConfig.webhookUrl, error: err?.response?.data ?? err?.message ?? err },
+          'Failed to configure webhook on activation',
+        );
       }
     }
 

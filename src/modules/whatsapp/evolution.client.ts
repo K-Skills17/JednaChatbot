@@ -71,14 +71,15 @@ export class EvolutionClient {
       integration: 'WHATSAPP-BAILEYS',
       qrcode: true,
       webhook: {
+        enabled: true,
         url: evolutionConfig.webhookUrl,
-        byEvents: false,
-        base64: false,
+        webhookByEvents: false,
+        webhookBase64: false,
         events: [
-          'messages.upsert',
-          'messages.update',
-          'connection.update',
-          'qrcode.updated',
+          'MESSAGES_UPSERT',
+          'MESSAGES_UPDATE',
+          'CONNECTION_UPDATE',
+          'QRCODE_UPDATED',
         ],
       },
     });
@@ -185,13 +186,14 @@ export class EvolutionClient {
   /** Set webhook URL for an instance */
   async setWebhook(instanceName: string, webhookUrl: string): Promise<void> {
     await this.http.post(`/webhook/set/${instanceName}`, {
+      enabled: true,
       url: webhookUrl,
-      webhook_by_events: false,
-      webhook_base64: false,
+      webhookByEvents: false,
+      webhookBase64: false,
       events: [
-        'messages.upsert',
-        'messages.update',
-        'connection.update',
+        'MESSAGES_UPSERT',
+        'MESSAGES_UPDATE',
+        'CONNECTION_UPDATE',
       ],
     });
 
