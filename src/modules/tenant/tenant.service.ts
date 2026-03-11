@@ -111,6 +111,7 @@ export class TenantService {
     if (!tenant?.evolutionInstanceId) throw new Error('No Evolution instance for this tenant');
 
     const status = await evolutionClient.getInstanceStatus(tenant.evolutionInstanceId);
+    logger.info({ id, state: status.state, tenantStatus: tenant.status }, 'WhatsApp status check');
 
     // If connected, activate tenant and ensure webhook is configured
     if (status.state === 'open' && tenant.status === 'onboarding') {
