@@ -73,6 +73,7 @@ export class EvolutionClient {
       webhook: {
         enabled: true,
         url: evolutionConfig.webhookUrl,
+        headers: { apikey: evolutionConfig.apiKey },
         webhookByEvents: false,
         webhookBase64: false,
         events: [
@@ -188,6 +189,7 @@ export class EvolutionClient {
     await this.http.post(`/webhook/set/${instanceName}`, {
       enabled: true,
       url: webhookUrl,
+      headers: { apikey: evolutionConfig.apiKey },
       webhookByEvents: false,
       webhookBase64: false,
       events: [
