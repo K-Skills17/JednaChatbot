@@ -187,6 +187,33 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
 // ── Facebook Graph API ──────────────────────────────────────────
 
+/**
+ * Debug endpoint: GET /api/facebook/debug-lead/:leadgenId
+ * Re-fetches a lead from Graph API and shows raw fields + scoring result.
+ * Use the leadgenId from your Railway logs to see exactly what Facebook sends.
+ */
+export async function debugFacebookLead(leadgenId: string): Promise<{
+  raw: FacebookLeadResponse | null;
+  parsedFields: Record<string, string>;
+  scoring: { noShowValue?: string; ticketValue?: string; result: any };
+}> {
+  const leadData = await fetchLeadFromFacebook(leadgenId);
+  if (!leadData) {
+    return { raw: null, parsedFields: {}, scoring: { result: null } };
+  }
+
+  const fields = parseLeadFields(leadData.field_data);
+  const noShowValue = findFieldByKeywords(fields, ['faltas', 'cancelamentos', 'no_show']);
+  const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket_médio', 'ticket']);
+  const result = calculateFormLeadScore(noShowValue, ticketValue);
+
+  return {
+    raw: leadData,
+    parsedFields: fields,
+    scoring: { noShowValue, ticketValue, result },
+  };
+}
+
 async function fetchLeadFromFacebook(leadgenId: string): Promise<FacebookLeadResponse | null> {
   const token = env.FACEBOOK_PAGE_ACCESS_TOKEN;
   if (!token) {
@@ -195,7 +222,7 @@ async function fetchLeadFromFacebook(leadgenId: string): Promise<FacebookLeadRes
   }
 
   try {
-    const url = `https://graph.facebook.com/v19.0/${leadgenId}?access_token=${token}`;
+    const url = `https://graph.facebook.com/v19.0/${leadgenId}?fields=id,created_time,field_data&access_token=${token}`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -204,7 +231,9 @@ async function fetchLeadFromFacebook(leadgenId: string): Promise<FacebookLeadRes
       return null;
     }
 
-    return (await response.json()) as FacebookLeadResponse;
+    const data = (await response.json()) as FacebookLeadResponse;
+    logger.info({ leadgenId, fieldCount: data.field_data?.length ?? 0, fieldNames: data.field_data?.map(f => f.name) }, 'Facebook Graph API raw response field names');
+    return data;
   } catch (err) {
     logger.error({ err, leadgenId }, 'Failed to fetch lead from Facebook Graph API');
     return null;
