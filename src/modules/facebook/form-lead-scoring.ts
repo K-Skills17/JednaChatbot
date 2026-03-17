@@ -131,9 +131,11 @@ export function buildScoredFirstMessage(
       `Oi ${displayName}! Aqui é da LK Digital. 👋`,
       `Vi que você preencheu nosso formulário no Facebook — obrigado!`,
       ``,
-      `Sabemos que faltas em consultas são um desafio para qualquer clínica. Preparamos o Protocolo de 7 Dias Anti-Faltas — são as 7 ações que clínicas usaram para reduzir faltas em 43%.`,
+      `Trabalhamos com clínicas que tinham desafios com faltas e cancelamentos. Usamos um método de diagnóstico que identifica exatamente *por que* os pacientes faltam ou cancelam na sua clínica — e quanto isso está custando.`,
       ``,
-      `Posso te enviar? 😊`,
+      `Queria te convidar para uma conversa de 30 minutos onde fazemos esse diagnóstico juntos. Se a gente perceber que podemos ajudar, ótimo. Se não, pelo menos você sai sabendo exatamente onde ${clinic} está perdendo dinheiro e já pode agir por conta própria.`,
+      ``,
+      `Faz sentido pra você? 😊`,
     ].join('\n');
   }
 
@@ -147,21 +149,33 @@ export function buildScoredFirstMessage(
     `📉 Perda mensal: ${formatBRL(scoring.monthlyLoss)}`,
     `📆 Perda anual: ${formatBRL(scoring.annualLoss)}`,
     ``,
-    `Mandei também o Protocolo de 7 Dias Anti-Faltas — são as 7 ações que as clínicas que reduziram faltas em 43% implementaram nos primeiros 7 dias.`,
+    `Esses números vêm das respostas que você deu no formulário — mas pela nossa experiência, a perda real costuma ser ainda maior quando a gente faz o diagnóstico completo.`,
   ];
 
   if (scoring.tier === 'tier3') {
     // URGENT — strongest CTA
     lines.push(``);
-    lines.push(`⚠️ Com ${scoring.noShowsPerMonth}+ faltas por mês, isso é urgente. Posso te mostrar como recuperar parte desse valor nos próximos 30 dias?`);
+    lines.push(`⚠️ Com ${scoring.noShowsPerMonth}+ faltas por mês, isso precisa de atenção urgente. Temos um método que identifica exatamente *por que* os pacientes ${clinic} estão faltando — e o que fazer pra reverter isso.`);
+    lines.push(``);
+    lines.push(`Quero te convidar para uma conversa de 30 minutos pra fazer esse diagnóstico juntos. Se a gente for o fit certo, te mostro o caminho. Se não, você sai com o mapa completo de onde está perdendo dinheiro e pode agir por conta própria.`);
+    lines.push(``);
+    lines.push(`Quando seria um bom horário pra gente conversar?`);
   } else if (scoring.tier === 'tier2') {
     // Hot — strong CTA
     lines.push(``);
-    lines.push(`Posso te mostrar como recuperar parte desse valor nos próximos 30 dias?`);
+    lines.push(`Usamos um método que identifica exatamente *por que* os pacientes ${clinic} estão faltando — e quanto disso é recuperável.`);
+    lines.push(``);
+    lines.push(`Queria te convidar para uma conversa de 30 minutos onde fazemos esse diagnóstico juntos. Se fizer sentido trabalharmos juntos, ótimo. Se não, pelo menos você sai sabendo exatamente onde está o problema e o que fazer pra parar essa perda.`);
+    lines.push(``);
+    lines.push(`Topa agendar?`);
   } else {
     // Tier 1 — standard CTA
     lines.push(``);
-    lines.push(`Posso te mostrar como recuperar parte desse valor nos próximos 30 dias?`);
+    lines.push(`Usamos um método de diagnóstico que identifica exatamente *por que* os pacientes faltam e cancelam — e mostra o que é possível recuperar.`);
+    lines.push(``);
+    lines.push(`Queria te convidar para uma conversa de 30 minutos onde analisamos a situação ${clinic} juntos. Se a gente perceber que podemos ajudar, ótimo. Se não, pelo menos você sai sabendo onde está perdendo dinheiro e pode agir por conta própria.`);
+    lines.push(``);
+    lines.push(`Faz sentido pra você?`);
   }
 
   return lines.join('\n');

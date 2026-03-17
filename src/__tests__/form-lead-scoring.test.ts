@@ -76,31 +76,40 @@ describe('calculateFormLeadScore', () => {
 });
 
 describe('buildScoredFirstMessage', () => {
-  it('builds nurture message without revenue numbers', () => {
+  it('builds nurture message with diagnostic call invite (no revenue numbers)', () => {
     const scoring = calculateFormLeadScore('Menos de 5', 'Até R$150')!;
     const msg = buildScoredFirstMessage('João', 'Clinica Sorriso', scoring);
     expect(msg).toContain('formulário no Facebook');
-    expect(msg).toContain('Protocolo de 7 Dias');
+    expect(msg).toContain('conversa de 30 minutos');
+    expect(msg).toContain('diagnóstico');
     // Nurture should NOT show the loss numbers
     expect(msg).not.toContain('Perda mensal');
+    // Should NOT mention Protocolo
+    expect(msg).not.toContain('Protocolo');
   });
 
-  it('builds tier1 message with revenue loss calculation', () => {
+  it('builds tier1 message with revenue loss and diagnostic call invite', () => {
     const scoring = calculateFormLeadScore('Entre 5 e 15', 'R$300–500')!;
     const msg = buildScoredFirstMessage('Maria', 'Clinica Dental Plus', scoring);
     expect(msg).toContain('formulário no Facebook');
     expect(msg).toContain('Faltas por mês');
     expect(msg).toContain('Perda mensal');
     expect(msg).toContain('Perda anual');
-    expect(msg).toContain('Protocolo de 7 Dias');
-    expect(msg).toContain('recuperar parte desse valor');
+    expect(msg).toContain('conversa de 30 minutos');
+    expect(msg).toContain('diagnóstico');
+    // Should NOT mention Protocolo
+    expect(msg).not.toContain('Protocolo');
   });
 
-  it('builds tier3 message with urgency', () => {
+  it('builds tier3 message with urgency and diagnostic call invite', () => {
     const scoring = calculateFormLeadScore('Mais de 30', 'R$500–800')!;
     const msg = buildScoredFirstMessage('Carlos', null, scoring);
     expect(msg).toContain('urgente');
     expect(msg).toContain('formulário no Facebook');
+    expect(msg).toContain('conversa de 30 minutos');
+    expect(msg).toContain('diagnóstico');
+    // Should NOT mention Protocolo
+    expect(msg).not.toContain('Protocolo');
   });
 
   it('handles null name gracefully', () => {
