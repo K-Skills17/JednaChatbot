@@ -379,7 +379,7 @@ function buildFallbackMessage(businessName: string, name: string | null): string
  *
  * Handles accented characters (e.g., "médio" matches "medio") and punctuation.
  */
-function findFieldByKeywords(fields: Record<string, string>, keywords: string[]): string | undefined {
+export function findFieldByKeywords(fields: Record<string, string>, keywords: string[]): string | undefined {
   // 1. Exact match on field name
   for (const keyword of keywords) {
     if (fields[keyword]) return fields[keyword];
@@ -405,7 +405,7 @@ function findFieldByKeywords(fields: Record<string, string>, keywords: string[])
 
 // ── Field Parsing ───────────────────────────────────────────────
 
-function parseLeadFields(fieldData: Array<{ name: string; values: string[] }>): Record<string, string> {
+export function parseLeadFields(fieldData: Array<{ name: string; values: string[] }>): Record<string, string> {
   const fields: Record<string, string> = {};
   for (const field of fieldData ?? []) {
     if (field.values && field.values.length > 0) {

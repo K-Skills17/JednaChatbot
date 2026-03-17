@@ -7,7 +7,7 @@ import { prisma } from '../../config/database';
 import { sendMessage } from '../whatsapp/message.sender';
 import { normalizeBrazilianPhone, cleanPhone } from '../../utils/phone.utils';
 import { calculateFormLeadScore, buildScoredFirstMessage } from './form-lead-scoring';
-import { debugFacebookLead } from './facebook.lead.processor';
+import { debugFacebookLead, parseLeadFields, findFieldByKeywords } from './facebook.lead.processor';
 
 /**
  * Facebook Lead Ads Webhook Handler
@@ -256,6 +256,47 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
       message_sent: firstMessage,
     });
   });
+  // ─── Simulate Endpoint — Test field matching without Graph API ──
+  // GET /webhook/facebook/simulate?faltas=Entre+5+e+15&ticket=R$300-500
+  app.get('/webhook/facebook/simulate', async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = request.query as Record<string, string>;
+
+    // Build a fake field_data array using the real Facebook field names
+    const fieldData = [
+      { name: 'full_name', values: [query.name ?? 'Teste'] },
+      { name: 'phone_number', values: [query.phone ?? '11999999999'] },
+      { name: 'quantas_faltas_ou_cancelamentos_você_tem_por_mês?_(média)', values: [query.faltas ?? 'Entre 5 e 15'] },
+      { name: 'qual_o_ticket_médio_de_uma_consulta_na_sua_clínica?_(r$)', values: [query.ticket ?? 'R$300–500'] },
+      { name: 'nome_da_sua_clínica_ou_consultório', values: [query.clinica ?? 'Clínica Teste'] },
+    ];
+
+    // Allow overriding field names to test what Facebook actually sends
+    if (query.field_names) {
+      // e.g. ?field_names=faltas_field:ticket_field:clinica_field
+      const [faltasName, ticketName, clinicaName] = query.field_names.split(':');
+      fieldData[2].name = faltasName ?? fieldData[2].name;
+      fieldData[3].name = ticketName ?? fieldData[3].name;
+      fieldData[4].name = clinicaName ?? fieldData[4].name;
+    }
+
+    const fields = parseLeadFields(fieldData);
+
+    const noShowValue = findFieldByKeywords(fields, ['faltas', 'cancelamentos', 'no_show']);
+    const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket_médio', 'ticket']);
+    const scoring = calculateFormLeadScore(noShowValue, ticketValue);
+    const clinicName = findFieldByKeywords(fields, ['clinica', 'consultorio', 'clinic']);
+
+    const message = scoring ? buildScoredFirstMessage(query.name ?? 'Teste', clinicName ?? null, scoring) : null;
+
+    return reply.send({
+      fieldData,
+      parsedFields: fields,
+      matched: { noShowValue, ticketValue, clinicName },
+      scoring,
+      message_preview: message,
+    });
+  });
+
   // ─── Debug Endpoint — Re-fetch lead and show raw fields + scoring ──
   // GET /webhook/facebook/debug/:leadgenId
   app.get('/webhook/facebook/debug/:leadgenId', async (request: FastifyRequest, reply: FastifyReply) => {
