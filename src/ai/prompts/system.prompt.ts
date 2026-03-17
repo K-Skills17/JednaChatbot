@@ -49,6 +49,7 @@ export function buildSystemPrompt(
 
   const isAuditLead = context.extractedData?.source === 'audit_tool' ||
     (context as any).auditReportSent === true;
+  const isFacebookLead = context.extractedData?.source === 'facebook_lead_ad';
 
   parts.push(buildIdentity(tenant.businessName, tenant.aiConfig.tone));
 
@@ -71,6 +72,8 @@ export function buildSystemPrompt(
   // Keep audit instructions active until the conversation moves to booking/closed
   if (isAuditLead && context.state !== 'booking' && context.state !== 'closed') {
     parts.push(buildAuditLeadInstructions(context));
+  } else if (isFacebookLead && context.state !== 'booking' && context.state !== 'closed') {
+    parts.push(buildFacebookLeadInstructions(context));
   } else {
     parts.push(buildStateInstructions(
       context.state,
@@ -171,6 +174,22 @@ function buildContactContext(contact: ContactData, context: ConversationContext)
   // Check if this lead came from the audit tool
   const isAuditLead = context.extractedData?.source === 'audit_tool' ||
     (context as any).auditReportSent === true;
+
+  const isFacebookLead = context.extractedData?.source === 'facebook_lead_ad';
+
+  if (isFacebookLead) {
+    lines.push('- **Origem: Formulário no Facebook** (preencheu formulário de anúncio no Facebook)');
+
+    const scoring = context.extractedData?.formScoring;
+    if (scoring) {
+      lines.push(`- Faltas por mês: ~${scoring.noShowsPerMonth} consultas`);
+      lines.push(`- Ticket médio: R$${scoring.averageTicket}`);
+      lines.push(`- Perda mensal calculada: R$${scoring.monthlyLoss}`);
+      lines.push(`- Perda anual calculada: R$${scoring.annualLoss}`);
+      lines.push(`- Nível de prioridade: ${scoring.priority}`);
+      lines.push(`- Tier: ${scoring.tier}`);
+    }
+  }
 
   if (isAuditLead) {
     lines.push('- **Origem: Ferramenta de Auditoria** (já recebeu o relatório de auditoria via WhatsApp)');
@@ -286,6 +305,48 @@ EXEMPLO DE BOA RESPOSTA:
 
 EXEMPLO DE RESPOSTA RUIM (NÃO FAÇA ISSO):
 "Ótimo! Você já tem um site pronto ou está começando agora?"`;
+}
+
+/**
+ * Special instructions for leads from Facebook lead ad forms.
+ * The AI should reference the Facebook form, the revenue loss calculation,
+ * and guide the conversation toward a demo/consultation.
+ */
+function buildFacebookLeadInstructions(context: ConversationContext): string {
+  const scoring = context.extractedData?.formScoring;
+
+  let scoringContext = '';
+  if (scoring) {
+    scoringContext = `
+- O lead já recebeu o cálculo de perda:
+  - ~${scoring.noShowsPerMonth} faltas/mês
+  - Ticket médio R$${scoring.averageTicket}
+  - Perda mensal R$${scoring.monthlyLoss}
+  - Perda anual R$${scoring.annualLoss}
+- Tier do lead: ${scoring.tier} (prioridade: ${scoring.priority})`;
+  }
+
+  return `## Fase Atual: Follow-up do Formulário Facebook
+
+REGRAS CRÍTICAS — LEIA COM ATENÇÃO:
+- Este contato preencheu um formulário no Facebook/Instagram sobre redução de faltas em clínicas.
+- A primeira mensagem JÁ mencionou que ele preencheu o formulário no Facebook e JÁ enviou os números de perda.${scoringContext}
+- SEMPRE que o contato perguntar de onde estamos entrando em contato, reforce que ele preencheu nosso formulário no Facebook.
+- NÃO repita os números de perda a menos que o contato pergunte especificamente.
+- O contato JÁ recebeu (ou vai receber) o Protocolo de 7 Dias Anti-Faltas.
+
+SEU OBJETIVO: Engajar o contato na conversa sobre redução de faltas e direcioná-lo para agendar uma demonstração/consulta.
+
+Como responder:
+1. Se o contato responder positivamente, aprofunde a conversa: pergunte sobre o cenário atual (confirmação de consultas, lembretes, sistema usado)
+2. Use os dados de perda já calculados como âncora de valor (sem repetir os números)
+3. Direcione para agendamento de demonstração quando sentir abertura
+4. Mude nextState para "booking" quando o contato aceitar agendar
+
+Se o contato fizer perguntas sobre a solução, responda brevemente e SEMPRE volte ao agendamento.
+Se o contato recusar, seja compreensivo e mantenha a porta aberta.
+
+IMPORTANTE: Se o contato perguntar "quem é você?" ou "de onde me conhecem?", SEMPRE diga que ele preencheu um formulário no Facebook sobre redução de faltas em clínicas.`;
 }
 
 function buildGreetingInstructions(customGreeting?: string): string {
