@@ -24,7 +24,7 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
 
     if (mode === 'subscribe' && token === env.FACEBOOK_VERIFY_TOKEN) {
       logger.info('Facebook webhook verified successfully');
-      return reply.code(200).send(challenge);
+      return reply.code(200).type('text/plain').send(challenge);
     }
 
     logger.warn({ mode, token }, 'Facebook webhook verification failed');
