@@ -41,6 +41,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
   // 2. Extract fields from the lead form
   const fields = parseLeadFields(leadData.field_data);
+  logger.info({ leadgenId, fields }, 'Facebook lead raw fields from Graph API');
   const phone = fields.phone_number ?? fields.phone ?? null;
   const name = fields.full_name ?? fields.first_name ?? null;
   const email = fields.email ?? null;
@@ -66,10 +67,11 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
   }
 
   // 4. Calculate lead score from form dropdown answers
-  const formScoring = calculateFormLeadScore(
-    fields.faltas_por_mes ?? fields.no_shows ?? fields.faltas,
-    fields.ticket_medio ?? fields.ticket ?? fields.valor_medio,
-  );
+  // Facebook field names vary — find them by keyword matching
+  const noShowValue = findFieldByKeywords(fields, ['faltas_por_mes', 'no_shows', 'faltas', 'falta']);
+  const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket', 'valor_medio', 'valor']);
+  logger.info({ leadgenId, noShowValue, ticketValue }, 'Facebook lead scoring fields resolved');
+  const formScoring = calculateFormLeadScore(noShowValue, ticketValue);
 
   const qualificationData: Record<string, any> = {
     source: 'facebook_lead_ad',
@@ -156,7 +158,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
   // 7. Build first message — use scored template if form data available, otherwise AI-generated
   const aiConfig = tenant.aiConfig as Record<string, any>;
-  const clinicName = fields.nome_da_clinica ?? fields.clinica ?? fields.clinic_name ?? null;
+  const clinicName = findFieldByKeywords(fields, ['nome_da_clinica', 'clinica', 'clinic_name', 'clinic']) ?? null;
 
   const firstMessage = formScoring
     ? buildScoredFirstMessage(name, clinicName, formScoring)
@@ -337,6 +339,37 @@ function extractReplyText(rawText: string): string {
 function buildFallbackMessage(businessName: string, name: string | null): string {
   const greeting = name ? `Olá, ${name}!` : 'Olá!';
   return `${greeting} Tudo bem? Aqui é da ${businessName}. Vi que você preencheu nosso formulário no Facebook e demonstrou interesse nos nossos serviços. Como posso te ajudar? 😊`;
+}
+
+// ── Field Matching ──────────────────────────────────────────────
+
+/**
+ * Find a field value by searching for keywords in field names.
+ * First tries exact match, then checks if any field name contains a keyword.
+ * Handles accented characters (e.g., "médio" matches "medio").
+ */
+function findFieldByKeywords(fields: Record<string, string>, keywords: string[]): string | undefined {
+  // 1. Exact match on field name
+  for (const keyword of keywords) {
+    if (fields[keyword]) return fields[keyword];
+  }
+
+  // 2. Fuzzy match — normalize and check if field name contains keyword
+  const normalizeStr = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_');
+
+  const normalizedKeywords = keywords.map(normalizeStr);
+
+  for (const [fieldName, value] of Object.entries(fields)) {
+    const normalizedField = normalizeStr(fieldName);
+    for (const nk of normalizedKeywords) {
+      if (normalizedField.includes(nk) || nk.includes(normalizedField)) {
+        return value;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 // ── Field Parsing ───────────────────────────────────────────────
