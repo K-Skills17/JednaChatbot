@@ -259,9 +259,11 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
   // ─── Debug Endpoint — Re-fetch lead and show raw fields + scoring ──
   // GET /webhook/facebook/debug/:leadgenId
   app.get('/webhook/facebook/debug/:leadgenId', async (request: FastifyRequest, reply: FastifyReply) => {
-    const apiKey = request.headers['x-api-key'] as string | undefined;
+    const query = request.query as Record<string, string>;
+    const apiKey = (request.headers['x-api-key'] as string | undefined) ?? query.key;
     if (apiKey !== env.API_KEY) {
-      return reply.code(401).send({ error: 'Invalid API key' });
+      logger.warn({ receivedKeyLength: apiKey?.length, expectedKeyLength: env.API_KEY?.length }, 'Debug endpoint: API key mismatch');
+      return reply.code(401).send({ error: 'Invalid API key', hint: `Received key length: ${apiKey?.length ?? 0}, expected length: ${env.API_KEY?.length ?? 0}` });
     }
 
     const { leadgenId } = request.params as { leadgenId: string };
