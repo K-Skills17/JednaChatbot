@@ -158,7 +158,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
   // 7. Build first message — use scored template if form data available, otherwise AI-generated
   const aiConfig = tenant.aiConfig as Record<string, any>;
-  const clinicName = findFieldByKeywords(fields, ['clinica', 'consultorio', 'clinic']) ?? null;
+  const clinicName = findFieldByKeywords(fields, ['nome+clinica', 'consultorio', 'nome+clinic']) ?? null;
 
   const firstMessage = formScoring
     ? buildScoredFirstMessage(name, clinicName, formScoring)
@@ -385,16 +385,17 @@ export function findFieldByKeywords(fields: Record<string, string>, keywords: st
     if (fields[keyword]) return fields[keyword];
   }
 
-  // 2. Fuzzy match — normalize both sides and check if the field name contains the keyword
   const normalizeStr = (s: string) =>
     s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-  const normalizedKeywords = keywords.map(normalizeStr);
-
+  // 2. Fuzzy match — normalize both sides and check if the field name contains the keyword.
+  //    Supports compound keywords with "+" meaning ALL parts must be present in the field name.
+  //    Example: "nome+clinica" matches "nome_da_sua_clínica" but NOT "ticket_médio_da_sua_clínica"
   for (const [fieldName, value] of Object.entries(fields)) {
     const normalizedField = normalizeStr(fieldName);
-    for (const nk of normalizedKeywords) {
-      if (normalizedField.includes(nk)) {
+    for (const keyword of keywords) {
+      const parts = keyword.split('+').map(normalizeStr);
+      if (parts.every(part => normalizedField.includes(part))) {
         return value;
       }
     }
