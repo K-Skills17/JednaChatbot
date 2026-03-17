@@ -68,8 +68,8 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
   // 4. Calculate lead score from form dropdown answers
   // Facebook field names vary — find them by keyword matching
-  const noShowValue = findFieldByKeywords(fields, ['faltas_por_mes', 'no_shows', 'faltas', 'falta']);
-  const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket', 'valor_medio', 'valor']);
+  const noShowValue = findFieldByKeywords(fields, ['faltas', 'cancelamentos', 'no_show']);
+  const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket_médio', 'ticket']);
   logger.info({ leadgenId, noShowValue, ticketValue }, 'Facebook lead scoring fields resolved');
   const formScoring = calculateFormLeadScore(noShowValue, ticketValue);
 
@@ -158,7 +158,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
   // 7. Build first message — use scored template if form data available, otherwise AI-generated
   const aiConfig = tenant.aiConfig as Record<string, any>;
-  const clinicName = findFieldByKeywords(fields, ['nome_da_clinica', 'clinica', 'clinic_name', 'clinic']) ?? null;
+  const clinicName = findFieldByKeywords(fields, ['clinica', 'consultorio', 'clinic']) ?? null;
 
   const firstMessage = formScoring
     ? buildScoredFirstMessage(name, clinicName, formScoring)
@@ -345,8 +345,10 @@ function buildFallbackMessage(businessName: string, name: string | null): string
 
 /**
  * Find a field value by searching for keywords in field names.
- * First tries exact match, then checks if any field name contains a keyword.
- * Handles accented characters (e.g., "médio" matches "medio").
+ * Facebook sends field names as slugified versions of the full question text,
+ * e.g. "quantas_faltas_ou_cancelamentos_você_tem_por_mês?_(média)"
+ *
+ * Handles accented characters (e.g., "médio" matches "medio") and punctuation.
  */
 function findFieldByKeywords(fields: Record<string, string>, keywords: string[]): string | undefined {
   // 1. Exact match on field name
@@ -354,16 +356,16 @@ function findFieldByKeywords(fields: Record<string, string>, keywords: string[])
     if (fields[keyword]) return fields[keyword];
   }
 
-  // 2. Fuzzy match — normalize and check if field name contains keyword
+  // 2. Fuzzy match — normalize both sides and check if the field name contains the keyword
   const normalizeStr = (s: string) =>
-    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_');
+    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
   const normalizedKeywords = keywords.map(normalizeStr);
 
   for (const [fieldName, value] of Object.entries(fields)) {
     const normalizedField = normalizeStr(fieldName);
     for (const nk of normalizedKeywords) {
-      if (normalizedField.includes(nk) || nk.includes(normalizedField)) {
+      if (normalizedField.includes(nk)) {
         return value;
       }
     }
