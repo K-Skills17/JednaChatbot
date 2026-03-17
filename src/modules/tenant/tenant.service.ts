@@ -111,6 +111,7 @@ export class TenantService {
     if (!tenant?.evolutionInstanceId) throw new Error('No Evolution instance for this tenant');
 
     const status = await evolutionClient.getInstanceStatus(tenant.evolutionInstanceId);
+    logger.info({ id, state: status.state, tenantStatus: tenant.status }, 'WhatsApp status check');
 
     // If connected, activate tenant and ensure webhook is configured
     if (status.state === 'open' && tenant.status === 'onboarding') {
@@ -123,8 +124,11 @@ export class TenantService {
           evolutionConfig.webhookUrl,
         );
         logger.info({ id, webhookUrl: evolutionConfig.webhookUrl }, 'Webhook configured on activation');
-      } catch (err) {
-        logger.warn({ err, id }, 'Failed to configure webhook on activation');
+      } catch (err: any) {
+        logger.warn(
+          { id, webhookUrl: evolutionConfig.webhookUrl, error: err?.response?.data ?? err?.message ?? err },
+          'Failed to configure webhook on activation',
+        );
       }
     }
 

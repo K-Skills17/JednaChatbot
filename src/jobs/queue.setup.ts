@@ -8,6 +8,7 @@ import { campaignProcessor } from './campaign.processor';
 import { campaignSchedulerProcessor } from './campaign.scheduler';
 import { notificationProcessor } from './notification.processor';
 import { facebookLeadProcessor } from '../modules/facebook/facebook.lead.processor';
+import { dailySummaryProcessor } from './daily-summary.processor';
 
 function getConnection() {
   return { connection: buildRedisOptions(env.REDIS_URL) };
@@ -51,6 +52,12 @@ let _facebookLeadQueue: Queue | null = null;
 export function getFacebookLeadQueue(): Queue {
   if (!_facebookLeadQueue) _facebookLeadQueue = new Queue('facebook-leads', getConnection());
   return _facebookLeadQueue;
+}
+
+let _dailySummaryQueue: Queue | null = null;
+function getDailySummaryQueue(): Queue {
+  if (!_dailySummaryQueue) _dailySummaryQueue = new Queue('daily-summary', getConnection());
+  return _dailySummaryQueue;
 }
 
 // ─── Workers ─────────────────────────────────────────────────
@@ -215,6 +222,39 @@ export function startFacebookLeadWorker(): void {
 
   activeWorkers.push(worker);
   logger.info('Facebook lead processing worker started');
+}
+
+export async function startDailySummaryScheduler(): Promise<void> {
+  await getDailySummaryQueue().add(
+    'daily-summary-tick',
+    {},
+    {
+      repeat: { pattern: '0 20 * * *' }, // Every day at 20:00 UTC (17:00 BRT)
+      removeOnComplete: 10,
+      removeOnFail: 50,
+    },
+  );
+
+  const worker = new Worker(
+    'daily-summary',
+    dailySummaryProcessor,
+    getConnection(),
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Daily summary tick completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Daily summary tick failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err }, 'Daily summary worker error');
+  });
+
+  activeWorkers.push(worker);
+  logger.info('Daily summary scheduler started (daily at 20:00 UTC)');
 }
 
 /** Gracefully stop all workers, waiting for in-flight jobs to finish */

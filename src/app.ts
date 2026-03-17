@@ -10,6 +10,7 @@ import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes';
 import { registerTrainingRoutes } from './modules/training/training.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
 import { registerFacebookWebhookRoutes } from './modules/facebook/facebook.webhook';
+import { registerAuditLeadRoutes } from './modules/whatsapp/audit-lead.handler';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
@@ -43,11 +44,18 @@ export async function buildApp() {
 
   await app.register(helmet, {
     contentSecurityPolicy: {
+      useDefaults: false,
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],  // Training page uses inline scripts
-        styleSrc: ["'self'", "'unsafe-inline'"],    // Training page uses inline styles
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:'],
+        fontSrc: ["'self'"],
+        connectSrc: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
       },
     },
   });
@@ -165,6 +173,7 @@ export async function buildApp() {
 
   app.register(async (instance) => registerWebhookRoutes(instance));
   app.register(async (instance) => registerFacebookWebhookRoutes(instance));
+  app.register(async (instance) => registerAuditLeadRoutes(instance));
   app.register(async (instance) => registerTenantRoutes(instance));
   app.register(async (instance) => registerBookingRoutes(instance));
   app.register(async (instance) => registerCampaignRoutes(instance));

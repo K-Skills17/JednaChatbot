@@ -71,14 +71,16 @@ export class EvolutionClient {
       integration: 'WHATSAPP-BAILEYS',
       qrcode: true,
       webhook: {
+        enabled: true,
         url: evolutionConfig.webhookUrl,
-        byEvents: false,
-        base64: false,
+        headers: { apikey: evolutionConfig.apiKey },
+        webhookByEvents: false,
+        webhookBase64: false,
         events: [
-          'messages.upsert',
-          'messages.update',
-          'connection.update',
-          'qrcode.updated',
+          'MESSAGES_UPSERT',
+          'MESSAGES_UPDATE',
+          'CONNECTION_UPDATE',
+          'QRCODE_UPDATED',
         ],
       },
     });
@@ -92,13 +94,19 @@ export class EvolutionClient {
     const { data } = await this.http.get(
       `/instance/connectionState/${instanceName}`,
     );
-    return data;
+    // Evolution API v2 nests the state: { instance: { state: "open" } }
+    const state = data?.instance?.state ?? data?.state ?? 'unknown';
+    return { state };
   }
 
   /** Connect instance (triggers QR code) */
   async connectInstance(instanceName: string): Promise<{ code: string; base64: string }> {
     const { data } = await this.http.get(`/instance/connect/${instanceName}`);
-    return data;
+    // Normalize: Evolution v2 may return flat or nested under a key
+    const code = data?.code ?? data?.pairingCode ?? '';
+    const base64 = data?.base64 ?? data?.qrcode?.base64 ?? '';
+    logger.info({ instanceName, hasCode: !!code, hasBase64: !!base64 }, 'Connect instance response');
+    return { code, base64 };
   }
 
   /** Disconnect / logout instance */
@@ -179,13 +187,15 @@ export class EvolutionClient {
   /** Set webhook URL for an instance */
   async setWebhook(instanceName: string, webhookUrl: string): Promise<void> {
     await this.http.post(`/webhook/set/${instanceName}`, {
+      enabled: true,
       url: webhookUrl,
-      webhook_by_events: false,
-      webhook_base64: false,
+      headers: { apikey: evolutionConfig.apiKey },
+      webhookByEvents: false,
+      webhookBase64: false,
       events: [
-        'messages.upsert',
-        'messages.update',
-        'connection.update',
+        'MESSAGES_UPSERT',
+        'MESSAGES_UPDATE',
+        'CONNECTION_UPDATE',
       ],
     });
 

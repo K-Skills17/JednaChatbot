@@ -305,7 +305,7 @@ export function dashboardHtml(): string {
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Phone</th><th>Plan</th><th>WhatsApp</th><th>AI Provider</th><th>Created</th><th>Actions</th></tr></thead>
+          <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Plan</th><th>WhatsApp</th><th>AI Provider</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody id="tenants-body"><tr><td colspan="7" class="empty-state"><div class="spinner"></div></td></tr></tbody>
         </table>
       </div>
@@ -567,14 +567,14 @@ export function dashboardHtml(): string {
         document.getElementById('stat-campaigns').textContent = campaignCount;
       });
     }).catch(function() {
-      document.getElementById('tenants-body').innerHTML = '<tr><td colspan="7" class="empty-state">Failed to load tenants.</td></tr>';
+      document.getElementById('tenants-body').innerHTML = '<tr><td colspan="8" class="empty-state">Failed to load tenants.</td></tr>';
     });
   }
 
   function renderTenantRows(tbodyId, tenants, compact) {
     var tbody = document.getElementById(tbodyId);
     if (!tenants.length) {
-      var cols = compact ? 5 : 7;
+      var cols = compact ? 5 : 8;
       tbody.innerHTML = '<tr><td colspan="' + cols + '" class="empty-state">No tenants found. Create one to get started.</td></tr>';
       return;
     }
@@ -593,6 +593,7 @@ export function dashboardHtml(): string {
       var waStatus = t.status === 'active' ? 'badge-green' : t.status === 'suspended' ? 'badge-red' : 'badge-yellow';
       var waLabel = t.status === 'active' ? 'Connected' : t.status === 'suspended' ? 'Suspended' : 'Onboarding';
       return '<tr>'
+        + '<td style="font-size:0.75rem;font-family:monospace;cursor:pointer;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Click to copy ' + t.id + '" data-copy-id="' + t.id + '">' + esc(t.id) + '</td>'
         + '<td><strong>' + esc(t.businessName || t.name || '—') + '</strong></td>'
         + '<td>' + esc(t.whatsappNumber || t.phone || '—') + '</td>'
         + '<td><span class="badge ' + planBadge + '">' + esc(plan) + '</span></td>'
@@ -990,6 +991,12 @@ export function dashboardHtml(): string {
     if (stat) {
       e.preventDefault();
       checkWhatsAppStatus(stat.getAttribute('data-status-tenant'));
+      return;
+    }
+    var copyEl = e.target.closest('[data-copy-id]');
+    if (copyEl) {
+      var tid = copyEl.getAttribute('data-copy-id');
+      navigator.clipboard.writeText(tid).then(function() { alert('Copied!'); });
       return;
     }
   });
