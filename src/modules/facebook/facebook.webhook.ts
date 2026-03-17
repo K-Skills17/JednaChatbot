@@ -7,6 +7,7 @@ import { prisma } from '../../config/database';
 import { sendMessage } from '../whatsapp/message.sender';
 import { normalizeBrazilianPhone, cleanPhone } from '../../utils/phone.utils';
 import { calculateFormLeadScore, buildScoredFirstMessage } from './form-lead-scoring';
+import { debugFacebookLead } from './facebook.lead.processor';
 
 /**
  * Facebook Lead Ads Webhook Handler
@@ -254,6 +255,18 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
       },
       message_sent: firstMessage,
     });
+  });
+  // ─── Debug Endpoint — Re-fetch lead and show raw fields + scoring ──
+  // GET /webhook/facebook/debug/:leadgenId
+  app.get('/webhook/facebook/debug/:leadgenId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const apiKey = request.headers['x-api-key'] as string | undefined;
+    if (apiKey !== env.API_KEY) {
+      return reply.code(401).send({ error: 'Invalid API key' });
+    }
+
+    const { leadgenId } = request.params as { leadgenId: string };
+    const result = await debugFacebookLead(leadgenId);
+    return reply.send(result);
   });
 }
 
