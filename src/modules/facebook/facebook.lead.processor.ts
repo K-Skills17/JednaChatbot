@@ -68,10 +68,19 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
   // 4. Calculate lead score from form dropdown answers
   // Facebook field names vary — find them by keyword matching
+  // Log ALL field names and values so we can debug mismatches
+  logger.info(
+    { leadgenId, fieldNames: Object.keys(fields), fieldEntries: Object.entries(fields).map(([k, v]) => `${k}=${v}`) },
+    'Facebook lead ALL fields before scoring',
+  );
   const noShowValue = findFieldByKeywords(fields, ['faltas', 'cancelamentos', 'no_show']);
   const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket_médio', 'ticket']);
-  logger.info({ leadgenId, noShowValue, ticketValue }, 'Facebook lead scoring fields resolved');
+  logger.info({ leadgenId, noShowValue, ticketValue, noShowFound: !!noShowValue, ticketFound: !!ticketValue }, 'Facebook lead scoring fields resolved');
   const formScoring = calculateFormLeadScore(noShowValue, ticketValue);
+  logger.info(
+    { leadgenId, scoringResult: formScoring ? 'SCORED' : 'NULL_FALLBACK_TO_AI', tier: formScoring?.tier },
+    formScoring ? 'Lead scored — will use template message' : 'Scoring returned null — will use AI-generated message',
+  );
 
   const qualificationData: Record<string, any> = {
     source: 'facebook_lead_ad',

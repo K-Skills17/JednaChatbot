@@ -74,15 +74,27 @@ export function calculateFormLeadScore(
   noShowAnswer: string | undefined,
   ticketAnswer: string | undefined,
 ): FormLeadScore | null {
-  if (!noShowAnswer || !ticketAnswer) return null;
+  if (!noShowAnswer || !ticketAnswer) {
+    console.log(`[SCORING] Missing input — noShowAnswer: "${noShowAnswer}", ticketAnswer: "${ticketAnswer}"`);
+    return null;
+  }
 
   const normalizedNoShow = noShowAnswer.toLowerCase().trim();
   const normalizedTicket = ticketAnswer.toLowerCase().trim();
 
+  console.log(`[SCORING] Normalized noShow: "${normalizedNoShow}", ticket: "${normalizedTicket}"`);
+  console.log(`[SCORING] Available NO_SHOW keys: ${JSON.stringify(Object.keys(NO_SHOW_MAP))}`);
+  console.log(`[SCORING] Available TICKET keys: ${JSON.stringify(Object.keys(TICKET_MAP))}`);
+
   const noShowTier = findMatch(normalizedNoShow, NO_SHOW_MAP);
   const ticketTier = findMatch(normalizedTicket, TICKET_MAP);
 
-  if (!noShowTier || !ticketTier) return null;
+  console.log(`[SCORING] noShowTier matched: ${!!noShowTier}, ticketTier matched: ${!!ticketTier}`);
+
+  if (!noShowTier || !ticketTier) {
+    console.log(`[SCORING] FAILED — no match for noShow="${normalizedNoShow}" or ticket="${normalizedTicket}"`);
+    return null;
+  }
 
   const noShowsPerMonth = noShowTier.calculationValue;
   const averageTicket = ticketTier.calculationValue;
