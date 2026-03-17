@@ -212,22 +212,22 @@ async function fetchLeadFromFacebook(leadgenId: string): Promise<FacebookLeadRes
 // ── Tenant Lookup ───────────────────────────────────────────────
 
 async function findTenantByFacebookPage(pageId: string): Promise<any | null> {
-  // Look for tenant where aiConfig.facebookPageId matches
-  const tenants = await prisma.tenant.findMany({
-    where: { status: 'active' },
+  // First: look for any tenant (active or onboarding) with a matching facebookPageId
+  const allTenants = await prisma.tenant.findMany({
+    where: { status: { in: ['active', 'onboarding'] } },
   });
 
-  for (const tenant of tenants) {
+  for (const tenant of allTenants) {
     const aiConfig = tenant.aiConfig as Record<string, any>;
     if (aiConfig?.facebookPageId === pageId) {
       return tenant;
     }
   }
 
-  // Fallback: if only one active tenant exists, use it (common for single-business setups)
-  if (tenants.length === 1) {
+  // Fallback: if only one tenant exists, use it (common for single-business setups)
+  if (allTenants.length === 1) {
     logger.info('Single tenant found — auto-linking Facebook leads to it');
-    return tenants[0];
+    return allTenants[0];
   }
 
   return null;

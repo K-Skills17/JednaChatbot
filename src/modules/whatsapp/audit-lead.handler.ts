@@ -48,6 +48,10 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
   app.post(
     '/webhook/audit-lead',
     async (request: FastifyRequest<{ Body: AuditLeadPayload }>, reply: FastifyReply) => {
+      if (!request.body || typeof request.body !== 'object') {
+        return reply.code(400).send({ error: 'Missing request body' });
+      }
+
       const { phone, name, reportMessage, auditData, tenantId, instanceName } = request.body;
 
       if (!phone) {
