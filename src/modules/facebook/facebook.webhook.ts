@@ -3,6 +3,10 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import { getFacebookLeadQueue } from '../../jobs/queue.setup';
+import { prisma } from '../../config/database';
+import { sendMessage } from '../whatsapp/message.sender';
+import { normalizeBrazilianPhone, cleanPhone } from '../../utils/phone.utils';
+import { calculateFormLeadScore, buildScoredFirstMessage } from './form-lead-scoring';
 
 /**
  * Facebook Lead Ads Webhook Handler
@@ -81,6 +85,186 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
 
     return reply.code(200).send({ received: true });
   });
+
+  // ─── Test Endpoint — Simulate Facebook Lead (bypasses Graph API) ──
+  // POST /webhook/facebook/test
+  // Use this to verify the full pipeline: scoring → message → WhatsApp send
+  // Protected by API_KEY so it can't be hit by the public
+  app.post('/webhook/facebook/test', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Require API key
+    const apiKey = request.headers['x-api-key'] as string | undefined;
+    if (apiKey !== env.API_KEY) {
+      return reply.code(401).send({ error: 'Invalid API key' });
+    }
+
+    const body = request.body as TestFacebookLeadPayload;
+
+    if (!body.phone) {
+      return reply.code(400).send({ error: 'Missing required field: phone' });
+    }
+
+    // Defaults for testing
+    const name = body.name ?? 'Lead Teste';
+    const phone = normalizeBrazilianPhone(body.phone) ?? cleanPhone(body.phone);
+    const noShows = body.faltas_por_mes ?? 'Entre 5 e 15';
+    const ticket = body.ticket_medio ?? 'R$300–500';
+    const clinicName = body.nome_da_clinica ?? null;
+    const dryRun = body.dry_run ?? false;
+
+    // 1. Calculate score
+    const formScoring = calculateFormLeadScore(noShows, ticket);
+
+    if (!formScoring) {
+      return reply.code(400).send({
+        error: 'Could not calculate score — check dropdown values',
+        hint: {
+          faltas_por_mes: ['Menos de 5', 'Entre 5 e 15', 'Entre 15 e 30', 'Mais de 30'],
+          ticket_medio: ['Até R$150', 'R$150–300', 'R$300–500', 'R$500–800', 'Acima de R$800'],
+        },
+        received: { faltas_por_mes: noShows, ticket_medio: ticket },
+      });
+    }
+
+    // 2. Build the message that would be sent
+    const firstMessage = buildScoredFirstMessage(name, clinicName, formScoring);
+
+    // If dry_run, return everything without actually sending or creating records
+    if (dryRun) {
+      return reply.send({
+        dry_run: true,
+        scoring: {
+          noShowsPerMonth: formScoring.noShowsPerMonth,
+          averageTicket: formScoring.averageTicket,
+          monthlyLoss: formScoring.monthlyLoss,
+          annualLoss: formScoring.annualLoss,
+          leadScore: formScoring.leadScore,
+          tier: formScoring.tier,
+          signalLevel: formScoring.signalLevel,
+          icpSignal: formScoring.icpSignal,
+          priority: formScoring.priority,
+        },
+        message_preview: firstMessage,
+        would_send_to: phone,
+      });
+    }
+
+    // 3. Find tenant
+    const tenant = await prisma.tenant.findFirst({ where: { status: 'active' } });
+    if (!tenant || !tenant.evolutionInstanceId) {
+      return reply.code(404).send({ error: 'No active tenant with WhatsApp instance found' });
+    }
+
+    // 4. Upsert contact
+    const qualificationData = {
+      source: 'facebook_lead_ad',
+      formId: 'test-form',
+      adId: null,
+      rawFields: { faltas_por_mes: noShows, ticket_medio: ticket, nome_da_clinica: clinicName },
+      formScoring: {
+        noShowsPerMonth: formScoring.noShowsPerMonth,
+        averageTicket: formScoring.averageTicket,
+        monthlyLoss: formScoring.monthlyLoss,
+        annualLoss: formScoring.annualLoss,
+        signalLevel: formScoring.signalLevel,
+        icpSignal: formScoring.icpSignal,
+        priority: formScoring.priority,
+        tier: formScoring.tier,
+      },
+    };
+
+    const contact = await prisma.contact.upsert({
+      where: { tenantId_phone: { tenantId: tenant.id, phone } },
+      update: {
+        lastContactAt: new Date(),
+        name,
+        leadScore: formScoring.leadScore,
+        qualificationData,
+      },
+      create: {
+        tenantId: tenant.id,
+        phone,
+        name,
+        leadStatus: formScoring.tier === 'nurture' ? 'new' : 'qualifying',
+        leadScore: formScoring.leadScore,
+        tags: ['facebook-lead', 'test'],
+        qualificationData,
+      },
+    });
+
+    // 5. Close any existing active conversation
+    await prisma.conversation.updateMany({
+      where: { tenantId: tenant.id, contactId: contact.id, status: 'active' },
+      data: { status: 'closed', closedAt: new Date() },
+    });
+
+    // 6. Create conversation
+    const conversation = await prisma.conversation.create({
+      data: {
+        tenantId: tenant.id,
+        contactId: contact.id,
+        status: 'active',
+        context: {
+          state: 'greeting',
+          extractedData: {
+            nome: name,
+            source: 'facebook_lead_ad',
+            formScoring: {
+              noShowsPerMonth: formScoring.noShowsPerMonth,
+              averageTicket: formScoring.averageTicket,
+              monthlyLoss: formScoring.monthlyLoss,
+              annualLoss: formScoring.annualLoss,
+              tier: formScoring.tier,
+              priority: formScoring.priority,
+            },
+            faltas_por_mes: noShows,
+            ticket_medio: ticket,
+          },
+          qualificationComplete: false,
+          messageCount: 0,
+        },
+      },
+    });
+
+    // 7. Send via WhatsApp
+    await sendMessage({
+      tenantId: tenant.id,
+      conversationId: conversation.id,
+      instanceName: tenant.evolutionInstanceId,
+      phone,
+      text: firstMessage,
+    });
+
+    logger.info(
+      { phone, tier: formScoring.tier, leadScore: formScoring.leadScore, monthlyLoss: formScoring.monthlyLoss },
+      'Test Facebook lead processed successfully',
+    );
+
+    return reply.send({
+      success: true,
+      contactId: contact.id,
+      conversationId: conversation.id,
+      scoring: {
+        noShowsPerMonth: formScoring.noShowsPerMonth,
+        averageTicket: formScoring.averageTicket,
+        monthlyLoss: formScoring.monthlyLoss,
+        annualLoss: formScoring.annualLoss,
+        leadScore: formScoring.leadScore,
+        tier: formScoring.tier,
+        priority: formScoring.priority,
+      },
+      message_sent: firstMessage,
+    });
+  });
+}
+
+interface TestFacebookLeadPayload {
+  phone: string;
+  name?: string;
+  faltas_por_mes?: string;
+  ticket_medio?: string;
+  nome_da_clinica?: string;
+  /** If true, only calculates and returns the score + message preview without sending */
+  dry_run?: boolean;
 }
 
 // ── Signature Verification ──────────────────────────────────────
