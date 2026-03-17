@@ -14,10 +14,16 @@ interface NoShowTier {
 }
 
 const NO_SHOW_MAP: Record<string, NoShowTier> = {
-  'menos de 5':  { calculationValue: 3,  signalLevel: 'low',    priority: 'nurture_only' },
-  'entre 5 e 15': { calculationValue: 10, signalLevel: 'qualified', priority: 'priority_wa' },
+  // Canonical forms (spaces)
+  'menos de 5':    { calculationValue: 3,  signalLevel: 'low',    priority: 'nurture_only' },
+  'entre 5 e 15':  { calculationValue: 10, signalLevel: 'qualified', priority: 'priority_wa' },
   'entre 15 e 30': { calculationValue: 22, signalLevel: 'hot',     priority: 'call_same_day' },
-  'mais de 30':  { calculationValue: 35, signalLevel: 'urgent',  priority: 'call_within_1h' },
+  'mais de 30':    { calculationValue: 35, signalLevel: 'urgent',  priority: 'call_within_1h' },
+  // Facebook slug forms (underscores) — in case normalization doesn't catch them
+  'menos_de_5':    { calculationValue: 3,  signalLevel: 'low',    priority: 'nurture_only' },
+  'entre_5_e_15':  { calculationValue: 10, signalLevel: 'qualified', priority: 'priority_wa' },
+  'entre_15_e_30': { calculationValue: 22, signalLevel: 'hot',     priority: 'call_same_day' },
+  'mais_de_30':    { calculationValue: 35, signalLevel: 'urgent',  priority: 'call_within_1h' },
 };
 
 // ── Ticket Dropdown Mapping ──────────────────────────────────
@@ -28,13 +34,14 @@ interface TicketTier {
 }
 
 const TICKET_MAP: Record<string, TicketTier> = {
-  'até r$150':    { calculationValue: 125, icpSignal: 'volume_clinic_lower_icp' },
-  'r$150–300':    { calculationValue: 225, icpSignal: 'standard_dental_core_icp' },
-  'r$150-300':    { calculationValue: 225, icpSignal: 'standard_dental_core_icp' },
-  'r$300–500':    { calculationValue: 400, icpSignal: 'premium_dental_strong_icp' },
-  'r$300-500':    { calculationValue: 400, icpSignal: 'premium_dental_strong_icp' },
-  'r$500–800':    { calculationValue: 650, icpSignal: 'aesthetic_implant_top_icp' },
-  'r$500-800':    { calculationValue: 650, icpSignal: 'aesthetic_implant_top_icp' },
+  'até r$150':      { calculationValue: 125, icpSignal: 'volume_clinic_lower_icp' },
+  'ate r$150':      { calculationValue: 125, icpSignal: 'volume_clinic_lower_icp' },
+  'r$150–300':      { calculationValue: 225, icpSignal: 'standard_dental_core_icp' },
+  'r$150-300':      { calculationValue: 225, icpSignal: 'standard_dental_core_icp' },
+  'r$300–500':      { calculationValue: 400, icpSignal: 'premium_dental_strong_icp' },
+  'r$300-500':      { calculationValue: 400, icpSignal: 'premium_dental_strong_icp' },
+  'r$500–800':      { calculationValue: 650, icpSignal: 'aesthetic_implant_top_icp' },
+  'r$500-800':      { calculationValue: 650, icpSignal: 'aesthetic_implant_top_icp' },
   'acima de r$800': { calculationValue: 900, icpSignal: 'high_end_priority_lead' },
 };
 
@@ -74,15 +81,29 @@ export function calculateFormLeadScore(
   noShowAnswer: string | undefined,
   ticketAnswer: string | undefined,
 ): FormLeadScore | null {
-  if (!noShowAnswer || !ticketAnswer) return null;
+  if (!noShowAnswer || !ticketAnswer) {
+    console.log(`[SCORING] Missing input — noShowAnswer: "${noShowAnswer}", ticketAnswer: "${ticketAnswer}"`);
+    return null;
+  }
 
-  const normalizedNoShow = noShowAnswer.toLowerCase().trim();
-  const normalizedTicket = ticketAnswer.toLowerCase().trim();
+  // Facebook sends dropdown values with underscores instead of spaces
+  // and a trailing underscore (e.g. "entre_5_e_15_" instead of "entre 5 e 15")
+  const normalizedNoShow = normalizeFacebookValue(noShowAnswer);
+  const normalizedTicket = normalizeFacebookValue(ticketAnswer);
+
+  console.log(`[SCORING] Normalized noShow: "${normalizedNoShow}", ticket: "${normalizedTicket}"`);
+  console.log(`[SCORING] Available NO_SHOW keys: ${JSON.stringify(Object.keys(NO_SHOW_MAP))}`);
+  console.log(`[SCORING] Available TICKET keys: ${JSON.stringify(Object.keys(TICKET_MAP))}`);
 
   const noShowTier = findMatch(normalizedNoShow, NO_SHOW_MAP);
   const ticketTier = findMatch(normalizedTicket, TICKET_MAP);
 
-  if (!noShowTier || !ticketTier) return null;
+  console.log(`[SCORING] noShowTier matched: ${!!noShowTier}, ticketTier matched: ${!!ticketTier}`);
+
+  if (!noShowTier || !ticketTier) {
+    console.log(`[SCORING] FAILED — no match for noShow="${normalizedNoShow}" or ticket="${normalizedTicket}"`);
+    return null;
+  }
 
   const noShowsPerMonth = noShowTier.calculationValue;
   const averageTicket = ticketTier.calculationValue;
@@ -183,6 +204,29 @@ export function buildScoredFirstMessage(
 
 // ── Internal Helpers ──────────────────────────────────────────
 
+/**
+ * Normalize Facebook form dropdown values.
+ * Facebook sends "entre_5_e_15_" instead of "entre 5 e 15",
+ * and "r$300–500" or "r$300_500" etc.
+ */
+function normalizeFacebookValue(raw: string): string {
+  return raw
+    .toLowerCase()
+    .trim()
+    .replace(/_+$/, '')   // strip trailing underscores
+    .replace(/_/g, ' ')   // underscores → spaces
+    .replace(/\s+/g, ' ') // collapse multiple spaces
+    .trim();
+}
+
+/**
+ * Strip everything except letters, digits, and $ to a canonical form for fuzzy comparison.
+ * e.g. "r$300–500" → "r$300500", "entre 5 e 15" → "entre5e15"
+ */
+function toCanonical(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9$]/g, '');
+}
+
 function findMatch<T>(normalized: string, map: Record<string, T>): T | null {
   // Direct match
   if (map[normalized]) return map[normalized];
@@ -190,6 +234,14 @@ function findMatch<T>(normalized: string, map: Record<string, T>): T | null {
   // Fuzzy match — check if the normalized value contains a key or vice versa
   for (const [key, value] of Object.entries(map)) {
     if (normalized.includes(key) || key.includes(normalized)) {
+      return value;
+    }
+  }
+
+  // Deep canonical match — strip all separators and compare
+  const canonInput = toCanonical(normalized);
+  for (const [key, value] of Object.entries(map)) {
+    if (canonInput === toCanonical(key)) {
       return value;
     }
   }
