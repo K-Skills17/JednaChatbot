@@ -89,7 +89,7 @@ async function main() {
         escalation: true,
       },
       plan: 'pro',
-      status: 'onboarding',
+      status: 'active',
     },
   });
 
