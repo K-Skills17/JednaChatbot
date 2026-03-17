@@ -7,6 +7,7 @@ import { reminderProcessor } from './reminder.processor';
 import { campaignProcessor } from './campaign.processor';
 import { campaignSchedulerProcessor } from './campaign.scheduler';
 import { notificationProcessor } from './notification.processor';
+import { facebookLeadProcessor } from '../modules/facebook/facebook.lead.processor';
 import { dailySummaryProcessor } from './daily-summary.processor';
 
 function getConnection() {
@@ -45,6 +46,12 @@ let _notificationQueue: Queue | null = null;
 export function getNotificationQueue(): Queue {
   if (!_notificationQueue) _notificationQueue = new Queue('notifications', getConnection());
   return _notificationQueue;
+}
+
+let _facebookLeadQueue: Queue | null = null;
+export function getFacebookLeadQueue(): Queue {
+  if (!_facebookLeadQueue) _facebookLeadQueue = new Queue('facebook-leads', getConnection());
+  return _facebookLeadQueue;
 }
 
 let _dailySummaryQueue: Queue | null = null;
@@ -189,6 +196,32 @@ export function startNotificationWorker(): void {
 
   activeWorkers.push(worker);
   logger.info('Notification worker started');
+}
+
+export function startFacebookLeadWorker(): void {
+  const worker = new Worker(
+    'facebook-leads',
+    facebookLeadProcessor,
+    {
+      ...getConnection(),
+      concurrency: 3,
+    },
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Facebook lead job completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Facebook lead job failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err }, 'Facebook lead worker error');
+  });
+
+  activeWorkers.push(worker);
+  logger.info('Facebook lead processing worker started');
 }
 
 export async function startDailySummaryScheduler(): Promise<void> {

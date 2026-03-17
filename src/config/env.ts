@@ -21,6 +21,11 @@ const envSchema = z.object({
   AI_PRIMARY_MODEL: z.string().default('claude-haiku-4-5-20251001'),
   AI_QUALIFICATION_MODEL: z.string().default('claude-sonnet-4-5-20250929'),
 
+  // Facebook Lead Ads
+  FACEBOOK_VERIFY_TOKEN: z.string().default('lk-chatbot-fb-verify-2024'),
+  FACEBOOK_APP_SECRET: z.string().optional(),
+  FACEBOOK_PAGE_ACCESS_TOKEN: z.string().optional(),
+
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),

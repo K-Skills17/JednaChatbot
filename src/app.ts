@@ -9,6 +9,7 @@ import { registerCampaignRoutes } from './modules/campaign/campaign.routes';
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes';
 import { registerTrainingRoutes } from './modules/training/training.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
+import { registerFacebookWebhookRoutes } from './modules/facebook/facebook.webhook';
 import { registerAuditLeadRoutes } from './modules/whatsapp/audit-lead.handler';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
@@ -171,6 +172,7 @@ export async function buildApp() {
   // ─── Routes (each wrapped in register() for hook encapsulation) ───
 
   app.register(async (instance) => registerWebhookRoutes(instance));
+  app.register(async (instance) => registerFacebookWebhookRoutes(instance));
   app.register(async (instance) => registerAuditLeadRoutes(instance));
   app.register(async (instance) => registerTenantRoutes(instance));
   app.register(async (instance) => registerBookingRoutes(instance));
