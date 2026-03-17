@@ -6,6 +6,7 @@ import { sendMessage } from '../whatsapp/message.sender';
 import { getProvider, getModelForTier } from '../../ai/ai.router';
 import { buildSystemPrompt } from '../../ai/prompts/system.prompt';
 import { normalizeBrazilianPhone, cleanPhone } from '../../utils/phone.utils';
+import { calculateFormLeadScore, buildScoredFirstMessage, FormLeadScore } from './form-lead-scoring';
 
 /**
  * Facebook Lead Job Data — enqueued by the webhook handler
@@ -64,7 +65,43 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
     return;
   }
 
-  // 4. Upsert contact
+  // 4. Calculate lead score from form dropdown answers
+  const formScoring = calculateFormLeadScore(
+    fields.faltas_por_mes ?? fields.no_shows ?? fields.faltas,
+    fields.ticket_medio ?? fields.ticket ?? fields.valor_medio,
+  );
+
+  const qualificationData: Record<string, any> = {
+    source: 'facebook_lead_ad',
+    formId,
+    adId: job.data.adId ?? null,
+    rawFields: fields,
+  };
+
+  // Attach scoring data if available
+  if (formScoring) {
+    qualificationData.formScoring = {
+      noShowsPerMonth: formScoring.noShowsPerMonth,
+      averageTicket: formScoring.averageTicket,
+      monthlyLoss: formScoring.monthlyLoss,
+      annualLoss: formScoring.annualLoss,
+      signalLevel: formScoring.signalLevel,
+      icpSignal: formScoring.icpSignal,
+      priority: formScoring.priority,
+      tier: formScoring.tier,
+    };
+    logger.info(
+      { leadgenId, tier: formScoring.tier, monthlyLoss: formScoring.monthlyLoss, leadScore: formScoring.leadScore },
+      'Facebook form lead scored',
+    );
+  }
+
+  // 5. Upsert contact
+  const initialLeadScore = formScoring?.leadScore ?? 0;
+  const initialLeadStatus = formScoring
+    ? (formScoring.tier === 'nurture' ? 'new' : 'qualifying')
+    : 'new';
+
   const contact = await prisma.contact.upsert({
     where: { tenantId_phone: { tenantId: tenant.id, phone: normalizedPhone } },
     update: {
@@ -72,30 +109,22 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
       name: name ?? undefined,
       email: email ?? undefined,
       tags: { push: 'facebook-lead' },
-      qualificationData: {
-        source: 'facebook_lead_ad',
-        formId,
-        adId: job.data.adId ?? null,
-        rawFields: fields,
-      },
+      leadScore: initialLeadScore,
+      qualificationData,
     },
     create: {
       tenantId: tenant.id,
       phone: normalizedPhone,
       name,
       email,
-      leadStatus: 'new',
+      leadStatus: initialLeadStatus,
+      leadScore: initialLeadScore,
       tags: ['facebook-lead'],
-      qualificationData: {
-        source: 'facebook_lead_ad',
-        formId,
-        adId: job.data.adId ?? null,
-        rawFields: fields,
-      },
+      qualificationData,
     },
   });
 
-  // 5. Create a new conversation
+  // 6. Create a new conversation
   const conversation = await prisma.conversation.create({
     data: {
       tenantId: tenant.id,
@@ -107,6 +136,16 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
           nome: name,
           email,
           source: 'facebook_lead_ad',
+          ...(formScoring ? {
+            formScoring: {
+              noShowsPerMonth: formScoring.noShowsPerMonth,
+              averageTicket: formScoring.averageTicket,
+              monthlyLoss: formScoring.monthlyLoss,
+              annualLoss: formScoring.annualLoss,
+              tier: formScoring.tier,
+              priority: formScoring.priority,
+            },
+          } : {}),
           ...fields,
         },
         qualificationComplete: false,
@@ -115,11 +154,15 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
     },
   });
 
-  // 6. Use Claude to craft the first message
+  // 7. Build first message — use scored template if form data available, otherwise AI-generated
   const aiConfig = tenant.aiConfig as Record<string, any>;
-  const firstMessage = await craftFirstMessage(tenant, contact, fields, aiConfig);
+  const clinicName = fields.nome_da_clinica ?? fields.clinica ?? fields.clinic_name ?? null;
 
-  // 7. Send via WhatsApp
+  const firstMessage = formScoring
+    ? buildScoredFirstMessage(name, clinicName, formScoring)
+    : await craftFirstMessage(tenant, contact, fields, aiConfig);
+
+  // 8. Send via WhatsApp
   await sendMessage({
     tenantId: tenant.id,
     conversationId: conversation.id,
@@ -128,7 +171,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
     text: firstMessage,
   });
 
-  // 8. Update contact status
+  // 9. Update contact status
   await prisma.contact.update({
     where: { id: contact.id },
     data: { leadStatus: 'qualifying', lastContactAt: new Date() },
@@ -260,7 +303,7 @@ async function craftFirstMessage(
 
 function buildLeadContextMessage(name: string | null, fields: Record<string, string>): string {
   const parts = [
-    `[SISTEMA] Este é um novo lead que acabou de preencher um formulário no Facebook/Instagram.`,
+    `[SISTEMA] Este é um novo lead que acabou de preencher um formulário no Facebook.`,
   ];
 
   if (name) parts.push(`Nome: ${name}`);
@@ -272,7 +315,7 @@ function buildLeadContextMessage(name: string | null, fields: Record<string, str
   }
 
   parts.push('');
-  parts.push('Envie uma primeira mensagem acolhedora e personalizada para este lead no WhatsApp. Mencione que viu o interesse dele(a) e pergunte como pode ajudar. NÃO mencione "Facebook" ou "formulário" — seja natural como se estivesse iniciando uma conversa.');
+  parts.push('Envie uma primeira mensagem acolhedora e personalizada para este lead no WhatsApp. IMPORTANTE: Mencione que ele(a) preencheu o formulário no Facebook para que saiba de onde estamos entrando em contato. Pergunte como pode ajudar.');
 
   return parts.join('\n');
 }
@@ -293,7 +336,7 @@ function extractReplyText(rawText: string): string {
 
 function buildFallbackMessage(businessName: string, name: string | null): string {
   const greeting = name ? `Olá, ${name}!` : 'Olá!';
-  return `${greeting} Tudo bem? Aqui é da ${businessName}. Vi que você demonstrou interesse nos nossos serviços. Como posso te ajudar? 😊`;
+  return `${greeting} Tudo bem? Aqui é da ${businessName}. Vi que você preencheu nosso formulário no Facebook e demonstrou interesse nos nossos serviços. Como posso te ajudar? 😊`;
 }
 
 // ── Field Parsing ───────────────────────────────────────────────
