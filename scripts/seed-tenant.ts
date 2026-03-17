@@ -81,6 +81,7 @@ async function main() {
         closingMessage: 'Foi um prazer conversar com você! Se precisar de algo mais, é só mandar mensagem. Até logo! 😊',
         escalationRules: 'Escale para atendimento humano quando o contato pedir explicitamente para falar com uma pessoa, ou quando o assunto for urgente ou sensível.',
         forbiddenTopics: ['política', 'religião', 'concorrentes'],
+        facebookPageId: '617830531423137',
       },
       notificationConfig: {
         newLead: true,
