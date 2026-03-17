@@ -284,7 +284,7 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
     const noShowValue = findFieldByKeywords(fields, ['faltas', 'cancelamentos', 'no_show']);
     const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket_médio', 'ticket']);
     const scoring = calculateFormLeadScore(noShowValue, ticketValue);
-    const clinicName = findFieldByKeywords(fields, ['clinica', 'consultorio', 'clinic']);
+    const clinicName = findFieldByKeywords(fields, ['nome+clinica', 'consultorio', 'nome+clinic']);
 
     const message = scoring ? buildScoredFirstMessage(query.name ?? 'Teste', clinicName ?? null, scoring) : null;
 
