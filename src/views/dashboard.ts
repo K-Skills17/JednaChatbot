@@ -222,18 +222,22 @@ export function dashboardHtml(): string {
 <div id="auth-gate" class="auth-gate">
   <div class="logo-big">LK</div>
   <h2>LK Chatbot Admin</h2>
-  <p>Enter admin password to access the dashboard.</p>
-  <div class="input-group">
-    <div class="password-wrapper">
-      <input id="admin-password-input" type="password" placeholder="Admin Password" />
-      <button type="button" class="toggle-password" id="btn-toggle-password" title="Show password">
-        <svg id="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        <svg id="icon-eye-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-      </button>
+  <p>Sign in with your admin account.</p>
+  <div style="text-align:left;max-width:360px;margin:0 auto">
+    <div class="form-field"><label style="color:var(--text-dim);font-size:12px">Email</label><input id="admin-email-input" type="email" placeholder="admin@example.com" style="width:100%;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;outline:none" /></div>
+    <div class="form-field"><label style="color:var(--text-dim);font-size:12px">Password</label>
+      <div class="password-wrapper">
+        <input id="admin-password-input" type="password" placeholder="********" />
+        <button type="button" class="toggle-password" id="btn-toggle-password" title="Show password">
+          <svg id="icon-eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg id="icon-eye-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
     </div>
-    <button class="btn" id="btn-connect">Log In</button>
+    <button class="btn" id="btn-connect" style="width:100%;margin-top:8px">Sign In</button>
   </div>
-  <div id="auth-error" class="auth-error">Invalid password. Check and try again.</div>
+  <div id="auth-error" class="auth-error">Invalid credentials. Check and try again.</div>
+  <p style="font-size:11px;color:var(--text-dim);margin-top:24px">First time? Use ADMIN_PASSWORD as setup key via API to create your admin account.</p>
 </div>
 
 <!-- DASHBOARD -->
@@ -257,6 +261,19 @@ export function dashboardHtml(): string {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         Campaigns
       </div>
+      <div class="nav-section">Platform</div>
+      <div class="nav-item" data-page="analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        Analytics
+      </div>
+      <div class="nav-item" data-page="audit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Audit Logs
+      </div>
+      <div class="nav-item" data-page="admins">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Admin Users
+      </div>
       <div class="nav-section">System</div>
       <div class="nav-item" data-page="health">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -268,8 +285,11 @@ export function dashboardHtml(): string {
       </div>
     </nav>
     <div class="sidebar-footer">
-      <span class="status-dot ok" id="sidebar-status"></span>
-      <span id="sidebar-status-text">System Online</span>
+      <div style="margin-bottom:8px"><span class="status-dot ok" id="sidebar-status"></span><span id="sidebar-status-text">System Online</span></div>
+      <div id="sidebar-admin-info" style="display:flex;align-items:center;justify-content:space-between">
+        <span id="sidebar-admin-name" style="font-size:12px;color:var(--text)"></span>
+        <a href="#" id="btn-logout" style="font-size:11px;color:var(--red);cursor:pointer">Logout</a>
+      </div>
     </div>
   </aside>
 
@@ -339,6 +359,74 @@ export function dashboardHtml(): string {
   </div>
 </div>
 
+    <!-- ANALYTICS -->
+    <div id="page-analytics" class="page">
+      <div class="page-header"><h2>Platform Analytics</h2><button class="btn btn-sm btn-outline" id="btn-refresh-analytics">Refresh</button></div>
+      <div class="cards" id="analytics-cards"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px">
+        <div class="table-wrap">
+          <div class="table-title">Tenants by Plan</div>
+          <table><tbody id="analytics-plan-body"></tbody></table>
+        </div>
+        <div class="table-wrap">
+          <div class="table-title">Tenants by Status</div>
+          <table><tbody id="analytics-status-body"></tbody></table>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-title">Recent Tenants</div>
+        <table>
+          <thead><tr><th>Name</th><th>Plan</th><th>Status</th><th>Created</th></tr></thead>
+          <tbody id="analytics-recent-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AUDIT LOGS -->
+    <div id="page-audit" class="page">
+      <div class="page-header"><h2>Audit Logs</h2><button class="btn btn-sm btn-outline" id="btn-refresh-audit">Refresh</button></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Entity</th><th>IP</th></tr></thead>
+          <tbody id="audit-body"><tr><td colspan="5" class="empty-state"><div class="spinner"></div></td></tr></tbody>
+        </table>
+      </div>
+      <div style="text-align:center;margin-top:12px">
+        <button class="btn btn-sm btn-outline" id="btn-audit-prev" disabled>Previous</button>
+        <span id="audit-page-info" style="font-size:12px;color:var(--text-dim);margin:0 12px">Page 1</span>
+        <button class="btn btn-sm btn-outline" id="btn-audit-next">Next</button>
+      </div>
+    </div>
+
+    <!-- ADMIN USERS -->
+    <div id="page-admins" class="page">
+      <div class="page-header"><h2>Admin Users</h2><button class="btn btn-sm" id="btn-new-admin">+ New Admin</button></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Last Login</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="admins-body"><tr><td colspan="6" class="empty-state"><div class="spinner"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NEW ADMIN MODAL -->
+    <div class="modal-overlay" id="new-admin-modal">
+      <div class="modal" style="max-width:400px">
+        <h3>Create Admin User</h3>
+        <div class="form-field"><label>Name *</label><input id="na-name" placeholder="Admin Name" /></div>
+        <div class="form-field"><label>Email *</label><input id="na-email" type="email" placeholder="admin@example.com" /></div>
+        <div class="form-field"><label>Password *</label><input id="na-password" type="password" placeholder="Min 8 characters" /></div>
+        <div class="form-field"><label>Role</label>
+          <select id="na-role"><option value="admin">Admin</option><option value="viewer">Viewer</option><option value="superadmin">Superadmin</option></select>
+        </div>
+        <div id="na-error" style="color:var(--red);font-size:13px;display:none"></div>
+        <div class="modal-actions">
+          <button class="btn btn-sm btn-outline" id="btn-cancel-admin">Cancel</button>
+          <button class="btn btn-sm" id="btn-create-admin">Create</button>
+        </div>
+      </div>
+    </div>
+
     <!-- HEALTH -->
     <div id="page-health" class="page">
       <div class="page-header">
@@ -389,6 +477,15 @@ export function dashboardHtml(): string {
             <tr><td><span class="badge badge-green">GET</span></td><td>/train/:tenantId</td><td>Training dashboard (no auth)</td></tr>
             <tr><td><span class="badge badge-green">GET</span></td><td>/api/training/template</td><td>Download training template JSON</td></tr>
             <tr><td><span class="badge badge-blue">POST</span></td><td>/api/training/:tenantId</td><td>Save training configuration</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/billing</td><td>Billing overview (plan, usage, invoices)</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/api/tenants/:tenantId/billing/checkout</td><td>Create Stripe checkout session</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/api/tenants/:tenantId/billing/portal</td><td>Create Stripe customer portal</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/billing/invoices</td><td>List invoices</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/reviews</td><td>List review requests</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/reviews/stats</td><td>Review statistics</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/api/tenants/:tenantId/reviews</td><td>Create review request</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/portal/:tenantId</td><td>Tenant self-service portal</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/webhook/stripe</td><td>Stripe webhook receiver</td></tr>
             <tr><td><span class="badge badge-blue">POST</span></td><td>/webhook/evolution</td><td>Evolution API webhook receiver</td></tr>
           </tbody>
         </table>
@@ -446,6 +543,8 @@ export function dashboardHtml(): string {
 <script>
   // ── State ─────────────────────────────────────────
   var API_KEY = '';
+  var ADMIN_TOKEN = '';
+  var ADMIN_USER = null;
 
   // ── Helpers ───────────────────────────────────────
   function esc(str) {
@@ -456,7 +555,24 @@ export function dashboardHtml(): string {
 
   function apiFetch(path, opts) {
     opts = opts || {};
-    var headers = { 'x-api-key': API_KEY };
+    var headers = {};
+    if (ADMIN_TOKEN) headers['Authorization'] = 'Bearer ' + ADMIN_TOKEN;
+    if (API_KEY) headers['x-api-key'] = API_KEY;
+    if (opts.body) headers['Content-Type'] = 'application/json';
+    opts.headers = Object.assign(headers, opts.headers || {});
+    return fetch(path, opts).then(function(res) {
+      if (res.status === 401 && ADMIN_TOKEN) {
+        // Token expired — logout
+        adminLogout();
+      }
+      return res;
+    });
+  }
+
+  function adminApiFetch(path, opts) {
+    opts = opts || {};
+    var headers = {};
+    if (ADMIN_TOKEN) headers['Authorization'] = 'Bearer ' + ADMIN_TOKEN;
     if (opts.body) headers['Content-Type'] = 'application/json';
     opts.headers = Object.assign(headers, opts.headers || {});
     return fetch(path, opts);
@@ -464,27 +580,56 @@ export function dashboardHtml(): string {
 
   // ── Auth ──────────────────────────────────────────
   function authenticate() {
+    var email = document.getElementById('admin-email-input').value.trim();
     var pw = document.getElementById('admin-password-input').value.trim();
-    if (!pw) return;
-    fetch('/api/admin/login', {
+    if (!email || !pw) return;
+
+    fetch('/api/admin/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw })
+      body: JSON.stringify({ email: email, password: pw })
     })
       .then(function(res) {
         if (!res.ok) throw new Error('Invalid');
         return res.json();
       })
       .then(function(data) {
-        API_KEY = data.apiKey;
-        sessionStorage.setItem('lk_api_key', data.apiKey);
-        document.getElementById('auth-gate').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'flex';
-        refreshAll();
+        ADMIN_TOKEN = data.token;
+        ADMIN_USER = data.user;
+        // Also get API_KEY for tenant-scoped routes (legacy compat)
+        return fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: '' })
+        }).catch(function() {}).then(function() {
+          sessionStorage.setItem('lk_admin_token', data.token);
+          sessionStorage.setItem('lk_admin_user', JSON.stringify(data.user));
+          enterDashboard();
+        });
       })
       .catch(function() {
         document.getElementById('auth-error').style.display = 'block';
       });
+  }
+
+  function enterDashboard() {
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'flex';
+    if (ADMIN_USER) {
+      document.getElementById('sidebar-admin-name').textContent = ADMIN_USER.name || ADMIN_USER.email;
+    }
+    refreshAll();
+  }
+
+  function adminLogout() {
+    ADMIN_TOKEN = '';
+    ADMIN_USER = null;
+    API_KEY = '';
+    sessionStorage.removeItem('lk_admin_token');
+    sessionStorage.removeItem('lk_admin_user');
+    sessionStorage.removeItem('lk_api_key');
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('auth-gate').style.display = 'block';
   }
 
   // ── Navigation ────────────────────────────────────
@@ -498,6 +643,9 @@ export function dashboardHtml(): string {
     if (name === 'tenants') loadTenants();
     if (name === 'campaigns') loadAllCampaigns();
     if (name === 'health') loadHealth();
+    if (name === 'analytics') loadPlatformAnalytics();
+    if (name === 'audit') loadAuditLogs(1);
+    if (name === 'admins') loadAdminUsers();
   }
 
   // ── Refresh ───────────────────────────────────────
@@ -604,6 +752,8 @@ export function dashboardHtml(): string {
         + '<a href="#" class="action-link" data-connect-tenant="' + t.id + '" style="color:var(--green)">Connect</a>'
         + '<a href="#" class="action-link" data-status-tenant="' + t.id + '" style="color:var(--blue)">Status</a>'
         + '<a href="/train/' + t.id + '" target="_blank" class="action-link">Train</a>'
+        + '<a href="/portal" target="_blank" class="action-link" style="color:var(--accent-light)">Portal</a>'
+        + (t.status === 'active' ? '<a href="#" class="action-link" data-suspend-tenant="' + t.id + '" style="color:var(--yellow)">Suspend</a>' : t.status === 'suspended' ? '<a href="#" class="action-link" data-activate-tenant="' + t.id + '" style="color:var(--green)">Activate</a>' : '')
         + '<a href="#" class="action-link" data-delete-tenant="' + t.id + '" data-tenant-name="' + esc(t.businessName || t.name || '—') + '" style="color:var(--red)">Delete</a>'
         + '</td></tr>';
     }).join('');
@@ -929,11 +1079,162 @@ export function dashboardHtml(): string {
       });
   }
 
+  // ── Platform Analytics ───────────────────────────
+  function loadPlatformAnalytics() {
+    adminApiFetch('/api/admin/analytics').then(function(r) { return r.json(); }).then(function(data) {
+      var cards = [
+        { label: 'Total Tenants', value: data.totalTenants || 0, color: 'var(--accent-light)' },
+        { label: 'Active Tenants', value: data.activeTenants || 0, color: 'var(--green)' },
+        { label: 'Total Contacts', value: data.totalContacts || 0, color: 'var(--blue)' },
+        { label: 'Total Conversations', value: data.totalConversations || 0, color: 'var(--blue)' },
+        { label: 'Total Bookings', value: data.totalBookings || 0, color: 'var(--accent-light)' },
+        { label: 'Total Messages', value: data.totalMessages || 0, color: 'var(--text)' },
+        { label: 'Total Reviews', value: data.totalReviews || 0, color: 'var(--yellow)' },
+        { label: 'Revenue (BRL)', value: 'R$ ' + ((data.totalRevenueCents || 0) / 100).toFixed(2), color: 'var(--green)' },
+        { label: 'AI Cost (USD/mo)', value: '$' + (data.totalMonthlyAiCost || 0).toFixed(2), color: 'var(--red)' },
+      ];
+      document.getElementById('analytics-cards').innerHTML = cards.map(function(c) {
+        return '<div class="card"><div class="card-label">' + c.label + '</div><div class="card-value" style="color:' + c.color + '">' + c.value + '</div></div>';
+      }).join('');
+
+      var planBody = document.getElementById('analytics-plan-body');
+      planBody.innerHTML = Object.entries(data.tenantsByPlan || {}).map(function(e) {
+        return '<tr><td>' + esc(e[0]) + '</td><td style="font-weight:600">' + e[1] + '</td></tr>';
+      }).join('') || '<tr><td colspan="2" class="empty-state">No data</td></tr>';
+
+      var statusBody = document.getElementById('analytics-status-body');
+      statusBody.innerHTML = Object.entries(data.tenantsByStatus || {}).map(function(e) {
+        var badge = e[0] === 'active' ? 'badge-green' : e[0] === 'suspended' ? 'badge-red' : 'badge-yellow';
+        return '<tr><td><span class="badge ' + badge + '">' + esc(e[0]) + '</span></td><td style="font-weight:600">' + e[1] + '</td></tr>';
+      }).join('') || '<tr><td colspan="2" class="empty-state">No data</td></tr>';
+
+      var recentBody = document.getElementById('analytics-recent-body');
+      recentBody.innerHTML = (data.recentTenants || []).map(function(t) {
+        var planBadge = t.plan === 'enterprise' ? 'badge-blue' : t.plan === 'pro' ? 'badge-green' : 'badge-dim';
+        var statusBadge = t.status === 'active' ? 'badge-green' : t.status === 'suspended' ? 'badge-red' : 'badge-yellow';
+        return '<tr><td>' + esc(t.businessName) + '</td><td><span class="badge ' + planBadge + '">' + esc(t.plan) + '</span></td><td><span class="badge ' + statusBadge + '">' + esc(t.status) + '</span></td><td>' + new Date(t.createdAt).toLocaleDateString() + '</td></tr>';
+      }).join('') || '<tr><td colspan="4" class="empty-state">No tenants yet</td></tr>';
+    }).catch(function() {
+      document.getElementById('analytics-cards').innerHTML = '<div class="empty-state">Failed to load analytics.</div>';
+    });
+  }
+
+  // ── Audit Logs ─────────────────────────────────
+  var auditPage = 1;
+
+  function loadAuditLogs(page) {
+    auditPage = page || 1;
+    adminApiFetch('/api/admin/audit-logs?page=' + auditPage + '&limit=30').then(function(r) { return r.json(); }).then(function(data) {
+      var logs = data.logs || [];
+      var total = data.total || 0;
+      var totalPages = Math.ceil(total / 30);
+      document.getElementById('audit-page-info').textContent = 'Page ' + auditPage + ' of ' + Math.max(1, totalPages) + ' (' + total + ' total)';
+      document.getElementById('btn-audit-prev').disabled = auditPage <= 1;
+      document.getElementById('btn-audit-next').disabled = auditPage >= totalPages;
+
+      document.getElementById('audit-body').innerHTML = logs.length ? logs.map(function(l) {
+        var time = new Date(l.createdAt).toLocaleString();
+        var admin = l.adminUser ? esc(l.adminUser.name || l.adminUser.email) : '<span style="color:var(--text-dim)">System</span>';
+        var actionBadge = l.action.includes('delete') ? 'badge-red' : l.action.includes('login') ? 'badge-blue' : l.action.includes('create') || l.action.includes('register') || l.action.includes('bootstrap') ? 'badge-green' : l.action.includes('suspend') ? 'badge-yellow' : 'badge-dim';
+        var entity = l.entityType ? esc(l.entityType) + (l.entityId ? ' <span style="font-family:monospace;font-size:10px;color:var(--text-dim)">' + esc(l.entityId.slice(0,8)) + '...</span>' : '') : '—';
+        return '<tr><td style="font-size:12px;white-space:nowrap">' + time + '</td><td>' + admin + '</td><td><span class="badge ' + actionBadge + '">' + esc(l.action) + '</span></td><td>' + entity + '</td><td style="font-family:monospace;font-size:11px">' + esc(l.ipAddress || '—') + '</td></tr>';
+      }).join('') : '<tr><td colspan="5" class="empty-state">No audit logs found.</td></tr>';
+    }).catch(function() {
+      document.getElementById('audit-body').innerHTML = '<tr><td colspan="5" class="empty-state">Failed to load audit logs.</td></tr>';
+    });
+  }
+
+  // ── Admin Users ────────────────────────────────
+  function loadAdminUsers() {
+    adminApiFetch('/api/admin/users').then(function(r) { return r.json(); }).then(function(data) {
+      var admins = data.admins || [];
+      document.getElementById('admins-body').innerHTML = admins.length ? admins.map(function(a) {
+        var roleBadge = a.role === 'superadmin' ? 'badge-red' : a.role === 'admin' ? 'badge-blue' : 'badge-dim';
+        var lastLogin = a.lastLoginAt ? new Date(a.lastLoginAt).toLocaleString() : 'Never';
+        var actions = (ADMIN_USER && ADMIN_USER.id !== a.id && ADMIN_USER.role === 'superadmin') ? '<a href="#" class="action-link" data-delete-admin="' + a.id + '" data-admin-name="' + esc(a.name) + '" style="color:var(--red)">Delete</a>' : '';
+        return '<tr><td><strong>' + esc(a.name) + '</strong>' + (ADMIN_USER && ADMIN_USER.id === a.id ? ' <span style="color:var(--text-dim)">(you)</span>' : '') + '</td><td>' + esc(a.email) + '</td><td><span class="badge ' + roleBadge + '">' + esc(a.role) + '</span></td><td style="font-size:12px">' + lastLogin + '</td><td style="font-size:12px">' + new Date(a.createdAt).toLocaleDateString() + '</td><td>' + actions + '</td></tr>';
+      }).join('') : '<tr><td colspan="6" class="empty-state">No admin users found.</td></tr>';
+    }).catch(function(err) {
+      document.getElementById('admins-body').innerHTML = '<tr><td colspan="6" class="empty-state">Access denied or failed to load admin users.</td></tr>';
+    });
+  }
+
+  function openNewAdminModal() {
+    document.getElementById('na-error').style.display = 'none';
+    document.getElementById('na-name').value = '';
+    document.getElementById('na-email').value = '';
+    document.getElementById('na-password').value = '';
+    document.getElementById('new-admin-modal').classList.add('open');
+  }
+
+  function closeNewAdminModal() {
+    document.getElementById('new-admin-modal').classList.remove('open');
+  }
+
+  function createAdmin() {
+    var name = document.getElementById('na-name').value.trim();
+    var email = document.getElementById('na-email').value.trim();
+    var password = document.getElementById('na-password').value;
+    var role = document.getElementById('na-role').value;
+    if (!name || !email || !password) {
+      var err = document.getElementById('na-error');
+      err.textContent = 'All fields are required.';
+      err.style.display = 'block';
+      return;
+    }
+    var btn = document.getElementById('btn-create-admin');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+    adminApiFetch('/api/admin/register', {
+      method: 'POST',
+      body: JSON.stringify({ name: name, email: email, password: password, role: role })
+    }).then(function(res) {
+      if (res.ok) { closeNewAdminModal(); loadAdminUsers(); }
+      else return res.json().then(function(d) {
+        var err = document.getElementById('na-error');
+        err.textContent = d.error || 'Failed to create admin.';
+        err.style.display = 'block';
+      });
+    }).catch(function() {
+      var err = document.getElementById('na-error');
+      err.textContent = 'Network error.';
+      err.style.display = 'block';
+    }).finally(function() { btn.disabled = false; btn.textContent = 'Create'; });
+  }
+
+  function deleteAdmin(adminId) {
+    if (!confirm('Delete this admin user?')) return;
+    adminApiFetch('/api/admin/users/' + adminId, { method: 'DELETE' }).then(function(res) {
+      if (res.ok) loadAdminUsers();
+      else alert('Failed to delete admin.');
+    });
+  }
+
+  // ── Tenant Suspend / Activate ──────────────────
+  function suspendTenant(tenantId) {
+    if (!confirm('Suspend this tenant?')) return;
+    adminApiFetch('/api/admin/tenants/' + tenantId + '/suspend', { method: 'POST', body: '{}' }).then(function(res) {
+      if (res.ok) { loadTenants(); loadOverview(); }
+      else alert('Failed to suspend tenant.');
+    });
+  }
+
+  function activateTenant(tenantId) {
+    adminApiFetch('/api/admin/tenants/' + tenantId + '/activate', { method: 'POST', body: '{}' }).then(function(res) {
+      if (res.ok) { loadTenants(); loadOverview(); }
+      else alert('Failed to activate tenant.');
+    });
+  }
+
   // ── Event Listeners (no inline handlers) ──────────
   document.getElementById('btn-connect').addEventListener('click', authenticate);
 
   document.getElementById('admin-password-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') authenticate();
+  });
+
+  document.getElementById('admin-email-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('admin-password-input').focus();
   });
 
   document.getElementById('btn-toggle-password').addEventListener('click', function() {
@@ -973,6 +1274,16 @@ export function dashboardHtml(): string {
   document.getElementById('btn-close-wa').addEventListener('click', closeWaModal);
   document.getElementById('btn-check-wa-status').addEventListener('click', function() { checkWhatsAppStatus(); });
 
+  // New admin management listeners
+  document.getElementById('btn-refresh-analytics').addEventListener('click', loadPlatformAnalytics);
+  document.getElementById('btn-refresh-audit').addEventListener('click', function() { loadAuditLogs(auditPage); });
+  document.getElementById('btn-audit-prev').addEventListener('click', function() { loadAuditLogs(auditPage - 1); });
+  document.getElementById('btn-audit-next').addEventListener('click', function() { loadAuditLogs(auditPage + 1); });
+  document.getElementById('btn-new-admin').addEventListener('click', openNewAdminModal);
+  document.getElementById('btn-cancel-admin').addEventListener('click', closeNewAdminModal);
+  document.getElementById('btn-create-admin').addEventListener('click', createAdmin);
+  document.getElementById('btn-logout').addEventListener('click', function(e) { e.preventDefault(); adminLogout(); });
+
   // Delegate clicks for dynamically-rendered action links
   document.addEventListener('click', function(e) {
     var del = e.target.closest('[data-delete-tenant]');
@@ -993,6 +1304,24 @@ export function dashboardHtml(): string {
       checkWhatsAppStatus(stat.getAttribute('data-status-tenant'));
       return;
     }
+    var suspend = e.target.closest('[data-suspend-tenant]');
+    if (suspend) {
+      e.preventDefault();
+      suspendTenant(suspend.getAttribute('data-suspend-tenant'));
+      return;
+    }
+    var activate = e.target.closest('[data-activate-tenant]');
+    if (activate) {
+      e.preventDefault();
+      activateTenant(activate.getAttribute('data-activate-tenant'));
+      return;
+    }
+    var delAdmin = e.target.closest('[data-delete-admin]');
+    if (delAdmin) {
+      e.preventDefault();
+      deleteAdmin(delAdmin.getAttribute('data-delete-admin'));
+      return;
+    }
     var copyEl = e.target.closest('[data-copy-id]');
     if (copyEl) {
       var tid = copyEl.getAttribute('data-copy-id');
@@ -1003,9 +1332,17 @@ export function dashboardHtml(): string {
 
   // ── Restore session on load ───────────────────────
   (function() {
-    var saved = sessionStorage.getItem('lk_api_key');
-    if (saved) {
-      API_KEY = saved;
+    var savedToken = sessionStorage.getItem('lk_admin_token');
+    var savedUser = sessionStorage.getItem('lk_admin_user');
+    var savedKey = sessionStorage.getItem('lk_api_key');
+    if (savedToken) {
+      ADMIN_TOKEN = savedToken;
+      try { ADMIN_USER = JSON.parse(savedUser); } catch(e) {}
+      if (savedKey) API_KEY = savedKey;
+      enterDashboard();
+    } else if (savedKey) {
+      // Legacy fallback
+      API_KEY = savedKey;
       document.getElementById('auth-gate').style.display = 'none';
       document.getElementById('dashboard').style.display = 'flex';
       refreshAll();

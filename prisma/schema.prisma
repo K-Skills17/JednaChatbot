@@ -19,8 +19,10 @@ model Tenant {
   aiConfig            Json     @map("ai_config")
   bookingConfig       Json?    @map("booking_config")
   notificationConfig  Json?    @map("notification_config")
+  reviewConfig        Json?    @map("review_config")  // { googleUrl?, facebookUrl?, delayHours? }
   status              String   @default("onboarding") // onboarding, active, suspended
   plan                String   @default("starter")    // starter, pro, enterprise
+  stripeCustomerId    String?  @unique @map("stripe_customer_id")
   apiKey              String?  @unique @map("api_key")
   monthlyAiCostUsd    Float    @default(0) @map("monthly_ai_cost_usd")
   aiCostLimitUsd      Float?   @map("ai_cost_limit_usd")
@@ -36,8 +38,68 @@ model Tenant {
   bookings      Booking[]
   campaigns     Campaign[]
   notifications Notification[]
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  reviews       Review[]
+  users         TenantUser[]
 
   @@map("tenants")
+}
+
+// ─── Tenant Users (Portal Auth) ─────────────────────────────
+
+model TenantUser {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  role         String    @default("owner") // owner, staff
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_users")
+}
+
+// ─── Admin Users (Platform Admins) ──────────────────────────
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  role         String    @default("admin") // superadmin, admin, viewer
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  auditLogs AuditLog[]
+
+  @@map("admin_users")
+}
+
+// ─── Audit Log ──────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  adminUserId String?  @map("admin_user_id")
+  action      String   // tenant.create, tenant.delete, tenant.update, admin.login, etc.
+  entityType  String?  @map("entity_type") // tenant, campaign, booking, admin_user
+  entityId    String?  @map("entity_id")
+  details     Json?    // Additional context
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // ─── Contacts / Leads ────────────────────────────────────────
@@ -62,6 +124,7 @@ model Contact {
   conversations Conversation[]
   bookings      Booking[]
   campaignContacts CampaignContact[]
+  reviews       Review[]
 
   @@unique([tenantId, phone])
   @@index([tenantId, phone])
@@ -123,7 +186,9 @@ model Booking {
   durationMinutes Int      @default(30) @map("duration_minutes")
   status          String   @default("confirmed") // confirmed, cancelled, completed, no_show
   calendarEventId String?  @map("calendar_event_id")
+  meetLink        String?  @map("meet_link")
   reminderSent    Boolean  @default(false) @map("reminder_sent")
+  noShowFollowUpSent Boolean @default(false) @map("no_show_follow_up_sent")
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
 
@@ -189,4 +254,72 @@ model Notification {
 
   @@index([tenantId, type])
   @@map("notifications")
+}
+
+// ─── Subscriptions (Stripe) ─────────────────────────────────
+
+model Subscription {
+  id                   String    @id @default(uuid())
+  tenantId             String    @map("tenant_id")
+  stripeSubscriptionId String    @unique @map("stripe_subscription_id")
+  stripePriceId        String    @map("stripe_price_id")
+  plan                 String    // starter, pro, enterprise
+  status               String    // active, past_due, canceled, trialing, unpaid
+  currentPeriodStart   DateTime  @map("current_period_start")
+  currentPeriodEnd     DateTime  @map("current_period_end")
+  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
+  canceledAt           DateTime? @map("canceled_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("subscriptions")
+}
+
+// ─── Invoices (Stripe) ──────────────────────────────────────
+
+model Invoice {
+  id               String    @id @default(uuid())
+  tenantId         String    @map("tenant_id")
+  stripeInvoiceId  String    @unique @map("stripe_invoice_id")
+  amountDue        Int       @map("amount_due")       // in cents
+  amountPaid       Int       @default(0) @map("amount_paid")  // in cents
+  currency         String    @default("brl")
+  status           String    // draft, open, paid, void, uncollectible
+  invoiceUrl       String?   @map("invoice_url")
+  invoicePdf       String?   @map("invoice_pdf")
+  periodStart      DateTime  @map("period_start")
+  periodEnd        DateTime  @map("period_end")
+  paidAt           DateTime? @map("paid_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("invoices")
+}
+
+// ─── Reviews (Post-appointment) ─────────────────────────────
+
+model Review {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  contactId       String    @map("contact_id")
+  bookingId       String?   @map("booking_id")
+  rating          Int?      // 1-5 stars
+  comment         String?
+  status          String    @default("pending") // pending, sent, responded, expired
+  reviewLink      String?   @map("review_link") // Google/Facebook review URL
+  requestSentAt   DateTime? @map("request_sent_at")
+  respondedAt     DateTime? @map("responded_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("reviews")
 }
