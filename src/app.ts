@@ -203,27 +203,28 @@ export async function buildApp() {
   const portalDistDir = path.join(__dirname, '..', 'client', 'dist');
 
   if (fs.existsSync(portalDistDir)) {
-    // Serve static assets from Vite build output
+    // Serve static assets from Vite build output.
+    // wildcard: false prevents @fastify/static from registering its own
+    // catch-all GET /portal/* so we can add an SPA fallback route below.
     const fastifyStatic = await import('@fastify/static');
     await app.register(fastifyStatic.default, {
       root: portalDistDir,
       prefix: '/portal/',
       decorateReply: false,
+      wildcard: false,
     });
+
+    const serveIndex = async (_request: any, reply: any) => {
+      const indexPath = path.join(portalDistDir, 'index.html');
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      return reply.type('text/html').send(html);
+    };
 
     // SPA fallback — serve index.html for all /portal/* routes not matching a file
-    app.get('/portal/*', async (_request, reply) => {
-      const indexPath = path.join(portalDistDir, 'index.html');
-      const html = fs.readFileSync(indexPath, 'utf-8');
-      return reply.type('text/html').send(html);
-    });
+    app.get('/portal/*', serveIndex);
 
     // Also handle exact /portal route
-    app.get('/portal', async (_request, reply) => {
-      const indexPath = path.join(portalDistDir, 'index.html');
-      const html = fs.readFileSync(indexPath, 'utf-8');
-      return reply.type('text/html').send(html);
-    });
+    app.get('/portal', serveIndex);
   }
 
   // ─── Error Handler ────────────────────────────────────────
