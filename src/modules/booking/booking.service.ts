@@ -153,6 +153,20 @@ export class BookingService {
     logger.info({ bookingId: id }, 'Booking cancelled');
   }
 
+  /** Mark a booking as completed (call happened — prevents no-show follow-up) */
+  async complete(id: string): Promise<BookingWithDetails> {
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking) throw new Error('Booking not found');
+
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: { status: 'completed' },
+    });
+
+    logger.info({ bookingId: id }, 'Booking marked as completed');
+    return updated as BookingWithDetails;
+  }
+
   /** Reschedule a booking */
   async reschedule(id: string, newScheduledAt: Date): Promise<BookingWithDetails> {
     const booking = await prisma.booking.findUnique({
