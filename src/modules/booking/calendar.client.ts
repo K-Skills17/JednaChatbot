@@ -25,6 +25,7 @@ export interface CalendarEvent {
   start: Date;
   end: Date;
   htmlLink?: string;
+  meetLink?: string;
 }
 
 /**
@@ -125,6 +126,7 @@ export class CalendarClient {
 
     const response = await this.calendar.events.insert({
       calendarId: this.calendarId,
+      conferenceDataVersion: 1,
       requestBody: {
         summary,
         description: `${description}\n\nTelefone: ${attendeePhone ?? 'N/A'}`,
@@ -136,6 +138,12 @@ export class CalendarClient {
           dateTime: endTime.toISOString(),
           timeZone: timezone,
         },
+        conferenceData: {
+          createRequest: {
+            requestId: `lk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            conferenceSolutionKey: { type: 'hangoutsMeet' },
+          },
+        },
         reminders: {
           useDefault: false,
           overrides: [
@@ -146,7 +154,11 @@ export class CalendarClient {
       },
     });
 
-    logger.info({ eventId: response.data.id, summary }, 'Calendar event created');
+    const meetLink = response.data.conferenceData?.entryPoints?.find(
+      (ep: any) => ep.entryPointType === 'video',
+    )?.uri ?? undefined;
+
+    logger.info({ eventId: response.data.id, summary, meetLink }, 'Calendar event created');
 
     return {
       eventId: response.data.id!,
@@ -154,6 +166,7 @@ export class CalendarClient {
       start: new Date(response.data.start?.dateTime ?? startTime),
       end: new Date(response.data.end?.dateTime ?? endTime),
       htmlLink: response.data.htmlLink ?? undefined,
+      meetLink,
     };
   }
 

@@ -123,7 +123,9 @@ model Booking {
   durationMinutes Int      @default(30) @map("duration_minutes")
   status          String   @default("confirmed") // confirmed, cancelled, completed, no_show
   calendarEventId String?  @map("calendar_event_id")
+  meetLink        String?  @map("meet_link")
   reminderSent    Boolean  @default(false) @map("reminder_sent")
+  noShowFollowUpSent Boolean @default(false) @map("no_show_follow_up_sent")
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
 

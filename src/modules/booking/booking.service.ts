@@ -23,6 +23,7 @@ interface BookingWithDetails {
   status: string;
   appointmentType: string | null;
   calendarEventId: string | null;
+  meetLink: string | null;
   notes: string | null;
 }
 
@@ -65,10 +66,14 @@ export class BookingService {
 
         await prisma.booking.update({
           where: { id: booking.id },
-          data: { calendarEventId: event.eventId },
+          data: {
+            calendarEventId: event.eventId,
+            meetLink: event.meetLink ?? null,
+          },
         });
 
         booking.calendarEventId = event.eventId;
+        (booking as any).meetLink = event.meetLink ?? null;
       } catch (err) {
         logger.error({ err, bookingId: booking.id }, 'Failed to create calendar event');
       }
@@ -236,6 +241,14 @@ export class BookingService {
         { delay: reminder1h - now },
       );
     }
+
+    // No-show follow-up: 30 min after the scheduled time
+    const noShowCheck = scheduledAt.getTime() + 30 * 60 * 1000;
+    await getReminderQueue().add(
+      'no-show-followup',
+      { bookingId, tenantId, contactId },
+      { delay: noShowCheck - now },
+    );
   }
 }
 
