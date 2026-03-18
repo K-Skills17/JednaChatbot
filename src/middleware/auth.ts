@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../config/env';
 import { prisma } from '../config/database';
 import { authService } from '../modules/auth/auth.service';
+import { adminService } from '../modules/admin/admin.service';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -12,19 +13,32 @@ declare module 'fastify' {
 /**
  * Validate authentication via API key or JWT Bearer token.
  *
- * Supports three modes (tried in order):
- *  1. JWT Bearer token — validates token and attaches tenantId from payload.
- *  2. Per-tenant API key — looks up the tenant by apiKey.
- *  3. Global API key — falls back to env.API_KEY for admin access.
+ * Supports four modes (tried in order):
+ *  1. Admin JWT Bearer token — validates admin token, grants global access.
+ *  2. Tenant-user JWT Bearer token — validates token and attaches tenantId.
+ *  3. Per-tenant API key — looks up the tenant by apiKey.
+ *  4. Global API key — falls back to env.API_KEY for admin access.
  */
 export async function authMiddleware(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
-  // 1. Try JWT Bearer token
   const authHeader = request.headers.authorization;
+
+  // 1. Try JWT Bearer token
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
+
+    // 1a. Try admin JWT first
+    try {
+      const adminPayload = adminService.verifyToken(token);
+      (request as any).adminUser = adminPayload;
+      return; // Admin has global access
+    } catch {
+      // Not an admin token — try tenant user token
+    }
+
+    // 1b. Try tenant-user JWT
     try {
       const payload = authService.verifyToken(token);
       request.authenticatedTenantId = payload.tenantId;

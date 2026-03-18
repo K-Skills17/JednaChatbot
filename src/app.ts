@@ -19,6 +19,7 @@ import { registerPortalRoutes } from './modules/portal/portal.routes';
 import { registerReviewRoutes } from './modules/review/review.routes';
 import { registerAuthRoutes } from './modules/auth/auth.routes';
 import { registerContactRoutes } from './modules/contact/contact.routes';
+import { registerAdminRoutes } from './modules/admin/admin.routes';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
@@ -193,6 +194,7 @@ export async function buildApp() {
   app.register(async (instance) => registerReviewRoutes(instance));
   app.register(async (instance) => registerAuthRoutes(instance));
   app.register(async (instance) => registerContactRoutes(instance));
+  app.register(async (instance) => registerAdminRoutes(instance));
 
   // ─── Client Portal (React SPA) ─────────────────────────────
   const portalDistDir = path.join(__dirname, '..', 'client', 'dist');

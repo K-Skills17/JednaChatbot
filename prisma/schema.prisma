@@ -65,6 +65,43 @@ model TenantUser {
   @@map("tenant_users")
 }
 
+// ─── Admin Users (Platform Admins) ──────────────────────────
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  name         String
+  role         String    @default("admin") // superadmin, admin, viewer
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  auditLogs AuditLog[]
+
+  @@map("admin_users")
+}
+
+// ─── Audit Log ──────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  adminUserId String?  @map("admin_user_id")
+  action      String   // tenant.create, tenant.delete, tenant.update, admin.login, etc.
+  entityType  String?  @map("entity_type") // tenant, campaign, booking, admin_user
+  entityId    String?  @map("entity_id")
+  details     Json?    // Additional context
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  adminUser AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([adminUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
 // ─── Contacts / Leads ────────────────────────────────────────
 
 model Contact {

@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { tenantService } from './tenant.service';
 import { createTenantSchema, updateTenantSchema } from './tenant.schema';
 import { authMiddleware } from '../../middleware/auth';
+import { adminService } from '../admin/admin.service';
 
 export function registerTenantRoutes(app: FastifyInstance): void {
   // All tenant routes require API key
@@ -18,6 +19,11 @@ export function registerTenantRoutes(app: FastifyInstance): void {
 
       try {
         const tenant = await tenantService.create(parsed.data);
+        // Audit log (best-effort)
+        const adminUser = (request as any).adminUser;
+        if (adminUser) {
+          adminService.audit({ adminUserId: adminUser.adminId, action: 'tenant.create', entityType: 'tenant', entityId: tenant.id, ipAddress: request.ip }).catch(() => {});
+        }
         return reply.code(201).send(tenant);
       } catch (err: any) {
         const message = err?.message ?? 'Failed to create tenant';
@@ -81,6 +87,10 @@ export function registerTenantRoutes(app: FastifyInstance): void {
     async (request: FastifyRequest<{ Params: { tenantId: string } }>, reply: FastifyReply) => {
       try {
         await tenantService.delete(request.params.tenantId);
+        const adminUser = (request as any).adminUser;
+        if (adminUser) {
+          adminService.audit({ adminUserId: adminUser.adminId, action: 'tenant.delete', entityType: 'tenant', entityId: request.params.tenantId, ipAddress: request.ip }).catch(() => {});
+        }
         return reply.code(204).send();
       } catch (err: any) {
         const message = err?.message ?? 'Failed to delete tenant';
