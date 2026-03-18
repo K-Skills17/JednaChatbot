@@ -19,6 +19,21 @@ import { debugFacebookLead, parseLeadFields, findFieldByKeywords } from './faceb
  */
 
 export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
+  // ─── Capture raw body for signature verification ──────────────
+  // Facebook signs the raw request body; JSON.stringify(parsed) may differ.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (_req: FastifyRequest, body: Buffer, done: (err: Error | null, body?: any) => void) => {
+      try {
+        (_req as any).rawBody = body;
+        done(null, JSON.parse(body.toString()));
+      } catch (err: any) {
+        done(err);
+      }
+    },
+  );
+
   // ─── Webhook Verification (GET) ──────────────────────────────
   // Facebook sends this when you first register the webhook URL
   app.get('/webhook/facebook', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -41,8 +56,8 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
     // Verify signature if app secret is configured
     if (env.FACEBOOK_APP_SECRET) {
       const signature = request.headers['x-hub-signature-256'] as string | undefined;
-      const rawBody = JSON.stringify(request.body);
-      if (!verifyFacebookSignature(rawBody, signature)) {
+      const rawBody = (request as any).rawBody as Buffer | undefined;
+      if (!verifyFacebookSignature(rawBody?.toString(), signature)) {
         logger.warn('Invalid Facebook webhook signature');
         return reply.code(401).send({ error: 'Invalid signature' });
       }

@@ -47,8 +47,11 @@ export async function buildApp() {
   // ─── Plugins ──────────────────────────────────────────────
 
   await app.register(cors, {
-    origin: true,
+    origin: env.NODE_ENV === 'production'
+      ? [env.WEBHOOK_BASE_URL, `${env.WEBHOOK_BASE_URL}/portal`]
+      : true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
   });
 
   await app.register(helmet, {
