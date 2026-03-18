@@ -752,7 +752,8 @@ export function dashboardHtml(): string {
         + '<a href="#" class="action-link" data-connect-tenant="' + t.id + '" style="color:var(--green)">Connect</a>'
         + '<a href="#" class="action-link" data-status-tenant="' + t.id + '" style="color:var(--blue)">Status</a>'
         + '<a href="/train/' + t.id + '" target="_blank" class="action-link">Train</a>'
-        + '<a href="/portal" target="_blank" class="action-link" style="color:var(--accent-light)">Portal</a>'
+        + '<a href="/portal/' + t.id + '" target="_blank" class="action-link" style="color:var(--accent-light)">Portal</a>'
+        + '<a href="#" class="action-link" data-generate-key="' + t.id + '" style="color:var(--accent-light)">API Key</a>'
         + (t.status === 'active' ? '<a href="#" class="action-link" data-suspend-tenant="' + t.id + '" style="color:var(--yellow)">Suspend</a>' : t.status === 'suspended' ? '<a href="#" class="action-link" data-activate-tenant="' + t.id + '" style="color:var(--green)">Activate</a>' : '')
         + '<a href="#" class="action-link" data-delete-tenant="' + t.id + '" data-tenant-name="' + esc(t.businessName || t.name || '—') + '" style="color:var(--red)">Delete</a>'
         + '</td></tr>';
@@ -1226,6 +1227,18 @@ export function dashboardHtml(): string {
     });
   }
 
+  function generateApiKey(tenantId) {
+    adminApiFetch('/api/admin/tenants/' + tenantId + '/generate-key', { method: 'POST', body: '{}' }).then(function(res) {
+      if (!res.ok) { alert('Failed to generate API key.'); return; }
+      return res.json();
+    }).then(function(data) {
+      if (data && data.apiKey) {
+        prompt('API Key generated. Copy it now (it won\\'t be shown again in full):', data.apiKey);
+        loadTenants();
+      }
+    });
+  }
+
   // ── Event Listeners (no inline handlers) ──────────
   document.getElementById('btn-connect').addEventListener('click', authenticate);
 
@@ -1314,6 +1327,12 @@ export function dashboardHtml(): string {
     if (activate) {
       e.preventDefault();
       activateTenant(activate.getAttribute('data-activate-tenant'));
+      return;
+    }
+    var genKey = e.target.closest('[data-generate-key]');
+    if (genKey) {
+      e.preventDefault();
+      generateApiKey(genKey.getAttribute('data-generate-key'));
       return;
     }
     var delAdmin = e.target.closest('[data-delete-admin]');

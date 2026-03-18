@@ -1,3 +1,12 @@
+# ─── Stage 1: Build client portal (React + Vite) ──────────────
+FROM node:20-alpine AS client-builder
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm ci
+COPY client/ ./
+RUN npm run build
+
+# ─── Stage 2: Build server (TypeScript) ───────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
@@ -9,11 +18,13 @@ COPY src ./src/
 RUN npx prisma generate
 RUN npx tsc
 
+# ─── Stage 3: Production runtime ─────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
+COPY --from=client-builder /app/client/dist ./client/dist
 COPY prisma ./prisma/
 # ESM config for production — avoids needing tsx at runtime
 COPY prisma.config.mjs ./

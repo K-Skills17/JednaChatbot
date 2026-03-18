@@ -148,6 +148,16 @@ export class TenantService {
     return { webhookUrl: evolutionConfig.webhookUrl, instanceName: tenant.evolutionInstanceId };
   }
 
+  /** Generate (or regenerate) an API key for a tenant */
+  async generateApiKey(id: string) {
+    const apiKey = `lk_${crypto.randomBytes(24).toString('hex')}`;
+    const tenant = await prisma.tenant.update({
+      where: { id },
+      data: { apiKey },
+    });
+    return { apiKey: tenant.apiKey };
+  }
+
   /** Delete a tenant and all its related data */
   async delete(id: string) {
     const tenant = await prisma.tenant.findUnique({ where: { id } });
