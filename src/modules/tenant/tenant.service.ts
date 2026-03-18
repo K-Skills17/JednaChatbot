@@ -168,6 +168,7 @@ export class TenantService {
     // background at container start and may not have applied the new FK
     // constraints before the first delete request arrives.
     await prisma.$transaction(async (tx) => {
+      await tx.tenantUser.deleteMany({ where: { tenantId: id } });
       await tx.review.deleteMany({ where: { tenantId: id } });
       await tx.invoice.deleteMany({ where: { tenantId: id } });
       await tx.subscription.deleteMany({ where: { tenantId: id } });

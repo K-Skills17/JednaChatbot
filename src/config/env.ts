@@ -8,6 +8,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   API_KEY: z.string().min(1).default('not-set'),
   ADMIN_PASSWORD: z.string().optional(),
+  JWT_SECRET: z.string().default('lk-chatbot-jwt-secret-change-me'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
 
   DATABASE_URL: z.string().default(''),
   REDIS_URL: z.string().default(''),

@@ -37,11 +37,13 @@
     "@prisma/adapter-pg": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "axios": "^1.13.5",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.68.0",
     "dotenv": "^17.2.4",
     "fastify": "^5.7.4",
     "googleapis": "^171.4.0",
     "ioredis": "^5.10.0",
+    "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.1",
     "openai": "^6.21.0",
     "pg": "^8.18.0",
@@ -53,6 +55,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.2.3",
     "@types/nodemailer": "^7.0.9",
     "@types/pg": "^8.16.0",
