@@ -326,6 +326,33 @@ function buildFacebookLeadInstructions(context: ConversationContext): string {
 - Tier do lead: ${scoring.tier} (prioridade: ${scoring.priority})`;
   }
 
+  // Check which qualification questions have already been answered
+  const ed = context.extractedData ?? {};
+  const answered: string[] = [];
+  const missing: string[] = [];
+
+  const qualFields: Array<{ key: string; label: string }> = [
+    { key: 'is_owner', label: 'É dono(a)/sócio(a) da clínica' },
+    { key: 'num_chairs_or_patients', label: 'Quantas cadeiras / pacientes ativos por mês' },
+    { key: 'runs_paid_ads', label: 'Se já investe em tráfego pago (anúncios)' },
+    { key: 'marketing_budget', label: 'Orçamento mensal de marketing' },
+  ];
+
+  for (const f of qualFields) {
+    if (ed[f.key] != null && ed[f.key] !== '') {
+      answered.push(`✅ ${f.label}: ${ed[f.key]}`);
+    } else {
+      missing.push(`❌ ${f.label}`);
+    }
+  }
+
+  const allAnswered = missing.length === 0;
+
+  // Build booking eligibility rules
+  const gateSection = allAnswered
+    ? buildBookingGateEvaluation(ed)
+    : '';
+
   return `## Fase Atual: Follow-up do Formulário Facebook
 
 REGRAS CRÍTICAS — LEIA COM ATENÇÃO:
@@ -335,19 +362,70 @@ REGRAS CRÍTICAS — LEIA COM ATENÇÃO:
 - NÃO repita os números de perda a menos que o contato pergunte especificamente.
 - O contato JÁ foi convidado para uma conversa de diagnóstico de 30 minutos.
 
-SEU OBJETIVO: Agendar uma conversa de diagnóstico de 30 minutos com o contato. A proposta é: temos um método que identifica por que os pacientes faltam/cancelam e quanto isso custa. Na conversa, fazemos esse diagnóstico juntos. Se formos um bom fit, ótimo. Se não, pelo menos o contato sai sabendo exatamente onde está perdendo dinheiro e pode agir por conta própria.
+## Qualificação Obrigatória (antes de oferecer agendamento)
 
-Como responder:
-1. Se o contato responder positivamente, avance para marcar o horário da conversa de 30 minutos
-2. Use os dados de perda já calculados como âncora de valor (sem repetir os números)
-3. Reforce que a conversa é sem compromisso — no pior cenário, o contato sai com o diagnóstico completo
-4. Mude nextState para "booking" quando o contato aceitar agendar
+ANTES de oferecer agendar a conversa de diagnóstico, você PRECISA descobrir 4 informações.
+Faça UMA pergunta por vez, de forma natural e conversacional (NÃO como questionário).
+Adapte a ordem conforme o fluxo da conversa — não precisa seguir a ordem abaixo.
 
-Se o contato fizer perguntas sobre a solução, responda brevemente e SEMPRE volte ao agendamento da conversa de diagnóstico.
-Se o contato recusar, seja compreensivo e mantenha a porta aberta — reforce que mesmo 30 minutos podem revelar onde está a perda.
+### Perguntas que precisam ser respondidas:
+1. **É o dono(a) ou sócio(a) da clínica?** → salve em extractedData como "is_owner" (true/false)
+2. **Quantas cadeiras tem / quantos pacientes atende por mês?** → salve como "num_chairs_or_patients" (texto livre)
+3. **Já investe em tráfego pago (anúncios pagos)?** → salve como "runs_paid_ads" (true/false)
+4. **Qual o orçamento mensal de marketing?** → salve como "marketing_budget" (texto livre, ex: "R$2.000", "não tenho", "R$5.000-10.000")
+
+### Progresso da qualificação:
+${answered.length > 0 ? answered.join('\n') : '(nenhuma pergunta respondida ainda)'}
+${missing.length > 0 ? missing.join('\n') : '✅ TODAS respondidas — avalie a elegibilidade abaixo'}
+
+### Como perguntar:
+- Espere o contato responder à primeira mensagem antes de começar a qualificação
+- Faça perguntas naturais: "Só pra entender melhor, você é o dono da clínica?" em vez de "Pergunta 1: é dono?"
+- Se o contato responder várias de uma vez, ótimo — salve tudo que conseguir
+- Se o contato fizer perguntas sobre a solução, responda brevemente e depois faça a próxima pergunta de qualificação
+${gateSection}
+${!allAnswered ? `### IMPORTANTE:
+NÃO ofereça agendamento enquanto as 4 perguntas não forem respondidas.
+Se o contato pedir para agendar antes de responder, diga algo como: "Com certeza! Só preciso entender melhor a situação da sua clínica para preparar o melhor diagnóstico pra você."` : ''}
 
 IMPORTANTE: Se o contato perguntar "quem é você?" ou "de onde me conhecem?", SEMPRE diga que ele preencheu um formulário no Facebook sobre redução de faltas em clínicas.`;
 }
+
+/**
+ * Once all 4 qualification questions are answered, evaluate whether
+ * the lead should be offered a booking or politely closed.
+ */
+function buildBookingGateEvaluation(ed: Record<string, any>): string {
+  return `
+## Avaliação de Elegibilidade para Agendamento
+
+TODAS as 4 perguntas foram respondidas. Agora avalie:
+
+### Critérios para AGENDAR (lead qualificado):
+- É dono(a)/sócio(a) da clínica (is_owner = true)
+- Tem estrutura real (cadeiras ≥ 2 OU pacientes/mês ≥ 50)
+- Idealmente já investe em marketing OU tem orçamento mensal ≥ R$1.000
+
+### Critérios para NÃO agendar (lead não qualificado):
+- NÃO é dono/sócio e não tem poder de decisão
+- Clínica muito pequena (1 cadeira, poucos pacientes) sem orçamento de marketing
+- Não tem nenhum orçamento de marketing e não pretende investir
+
+### O que fazer:
+**Se qualificado:**
+- Mude leadStatus para "qualified" e leadScore para 70+
+- Ofereça agendar a conversa de diagnóstico de 30 minutos
+- Mude nextState para "booking" quando o contato aceitar
+- Diga algo como: "Perfeito! Com essas informações, consigo preparar um diagnóstico personalizado pra ${ed.is_owner ? 'sua clínica' : 'a clínica'}. Vamos marcar aquela conversa de 30 minutos? Qual dia e horário ficam melhores pra você?"
+
+**Se NÃO qualificado:**
+- Mude leadStatus para "lost" e leadScore para 20
+- Seja educado e empático — NÃO diga que foi desqualificado
+- Diga algo como: "Obrigado por compartilhar! No momento nosso método funciona melhor para clínicas com [razão contextual]. Mas se a situação mudar, é só entrar em contato! 😊"
+- Mude nextState para "closed"
+- Em qualificationReasoning explique por que não qualificou`;
+}
+
 
 function buildGreetingInstructions(customGreeting?: string): string {
   if (customGreeting) {
