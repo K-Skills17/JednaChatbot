@@ -389,6 +389,15 @@ export function dashboardHtml(): string {
             <tr><td><span class="badge badge-green">GET</span></td><td>/train/:tenantId</td><td>Training dashboard (no auth)</td></tr>
             <tr><td><span class="badge badge-green">GET</span></td><td>/api/training/template</td><td>Download training template JSON</td></tr>
             <tr><td><span class="badge badge-blue">POST</span></td><td>/api/training/:tenantId</td><td>Save training configuration</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/billing</td><td>Billing overview (plan, usage, invoices)</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/api/tenants/:tenantId/billing/checkout</td><td>Create Stripe checkout session</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/api/tenants/:tenantId/billing/portal</td><td>Create Stripe customer portal</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/billing/invoices</td><td>List invoices</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/reviews</td><td>List review requests</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/api/tenants/:tenantId/reviews/stats</td><td>Review statistics</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/api/tenants/:tenantId/reviews</td><td>Create review request</td></tr>
+            <tr><td><span class="badge badge-green">GET</span></td><td>/portal/:tenantId</td><td>Tenant self-service portal</td></tr>
+            <tr><td><span class="badge badge-blue">POST</span></td><td>/webhook/stripe</td><td>Stripe webhook receiver</td></tr>
             <tr><td><span class="badge badge-blue">POST</span></td><td>/webhook/evolution</td><td>Evolution API webhook receiver</td></tr>
           </tbody>
         </table>
@@ -604,6 +613,7 @@ export function dashboardHtml(): string {
         + '<a href="#" class="action-link" data-connect-tenant="' + t.id + '" style="color:var(--green)">Connect</a>'
         + '<a href="#" class="action-link" data-status-tenant="' + t.id + '" style="color:var(--blue)">Status</a>'
         + '<a href="/train/' + t.id + '" target="_blank" class="action-link">Train</a>'
+        + '<a href="/portal/' + t.id + '" target="_blank" class="action-link" style="color:var(--accent-light)">Portal</a>'
         + '<a href="#" class="action-link" data-delete-tenant="' + t.id + '" data-tenant-name="' + esc(t.businessName || t.name || '—') + '" style="color:var(--red)">Delete</a>'
         + '</td></tr>';
     }).join('');
