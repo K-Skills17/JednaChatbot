@@ -1,3 +1,5 @@
+import path from 'path';
+import fs from 'fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -16,6 +18,7 @@ import { registerStripeWebhookRoutes } from './modules/billing/stripe.webhook';
 import { registerPortalRoutes } from './modules/portal/portal.routes';
 import { registerReviewRoutes } from './modules/review/review.routes';
 import { registerAuthRoutes } from './modules/auth/auth.routes';
+import { registerContactRoutes } from './modules/contact/contact.routes';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
@@ -189,6 +192,34 @@ export async function buildApp() {
   app.register(async (instance) => registerPortalRoutes(instance));
   app.register(async (instance) => registerReviewRoutes(instance));
   app.register(async (instance) => registerAuthRoutes(instance));
+  app.register(async (instance) => registerContactRoutes(instance));
+
+  // ─── Client Portal (React SPA) ─────────────────────────────
+  const portalDistDir = path.join(__dirname, '..', 'client', 'dist');
+
+  if (fs.existsSync(portalDistDir)) {
+    // Serve static assets from Vite build output
+    const fastifyStatic = await import('@fastify/static');
+    await app.register(fastifyStatic.default, {
+      root: portalDistDir,
+      prefix: '/portal/',
+      decorateReply: false,
+    });
+
+    // SPA fallback — serve index.html for all /portal/* routes not matching a file
+    app.get('/portal/*', async (_request, reply) => {
+      const indexPath = path.join(portalDistDir, 'index.html');
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      return reply.type('text/html').send(html);
+    });
+
+    // Also handle exact /portal route
+    app.get('/portal', async (_request, reply) => {
+      const indexPath = path.join(portalDistDir, 'index.html');
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      return reply.type('text/html').send(html);
+    });
+  }
 
   // ─── Error Handler ────────────────────────────────────────
 
