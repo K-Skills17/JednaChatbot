@@ -3,6 +3,7 @@ import { adminService } from './admin.service';
 import { adminAuthMiddleware, superadminOnly } from '../../middleware/admin-auth';
 import { env } from '../../config/env';
 import { prisma } from '../../config/database';
+import { tenantService } from '../tenant/tenant.service';
 
 export function registerAdminRoutes(app: FastifyInstance): void {
   // ─── Public Admin Auth Routes ──────────────────────────────
@@ -214,6 +215,28 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       });
 
       return reply.send(tenant);
+    },
+  );
+
+  // Generate API key for tenant
+  app.post(
+    '/api/admin/tenants/:tenantId/generate-key',
+    { preHandler: adminAuthMiddleware },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const caller = request.adminUser!;
+      const { tenantId } = request.params as { tenantId: string };
+
+      const result = await tenantService.generateApiKey(tenantId);
+
+      await adminService.audit({
+        adminUserId: caller.adminId,
+        action: 'tenant.generate_key',
+        entityType: 'tenant',
+        entityId: tenantId,
+        ipAddress: request.ip,
+      });
+
+      return reply.send(result);
     },
   );
 
