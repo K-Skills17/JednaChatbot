@@ -19,6 +19,7 @@ model Tenant {
   aiConfig            Json     @map("ai_config")
   bookingConfig       Json?    @map("booking_config")
   notificationConfig  Json?    @map("notification_config")
+  reviewConfig        Json?    @map("review_config")  // { googleUrl?, facebookUrl?, delayHours? }
   status              String   @default("onboarding") // onboarding, active, suspended
   plan                String   @default("starter")    // starter, pro, enterprise
   stripeCustomerId    String?  @unique @map("stripe_customer_id")
@@ -39,6 +40,7 @@ model Tenant {
   notifications Notification[]
   subscriptions Subscription[]
   invoices      Invoice[]
+  reviews       Review[]
 
   @@map("tenants")
 }
@@ -65,6 +67,7 @@ model Contact {
   conversations Conversation[]
   bookings      Booking[]
   campaignContacts CampaignContact[]
+  reviews       Review[]
 
   @@unique([tenantId, phone])
   @@index([tenantId, phone])
@@ -239,4 +242,27 @@ model Invoice {
 
   @@index([tenantId])
   @@map("invoices")
+}
+
+// ─── Reviews (Post-appointment) ─────────────────────────────
+
+model Review {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  contactId       String    @map("contact_id")
+  bookingId       String?   @map("booking_id")
+  rating          Int?      // 1-5 stars
+  comment         String?
+  status          String    @default("pending") // pending, sent, responded, expired
+  reviewLink      String?   @map("review_link") // Google/Facebook review URL
+  requestSentAt   DateTime? @map("request_sent_at")
+  respondedAt     DateTime? @map("responded_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("reviews")
 }

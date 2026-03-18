@@ -9,6 +9,7 @@ import { campaignSchedulerProcessor } from './campaign.scheduler';
 import { notificationProcessor } from './notification.processor';
 import { facebookLeadProcessor } from '../modules/facebook/facebook.lead.processor';
 import { dailySummaryProcessor } from './daily-summary.processor';
+import { reviewRequestProcessor } from './review-request.processor';
 
 function getConnection() {
   return { connection: buildRedisOptions(env.REDIS_URL) };
@@ -52,6 +53,12 @@ let _facebookLeadQueue: Queue | null = null;
 export function getFacebookLeadQueue(): Queue {
   if (!_facebookLeadQueue) _facebookLeadQueue = new Queue('facebook-leads', getConnection());
   return _facebookLeadQueue;
+}
+
+let _reviewQueue: Queue | null = null;
+export function getReviewQueue(): Queue {
+  if (!_reviewQueue) _reviewQueue = new Queue('review-requests', getConnection());
+  return _reviewQueue;
 }
 
 let _dailySummaryQueue: Queue | null = null;
@@ -222,6 +229,29 @@ export function startFacebookLeadWorker(): void {
 
   activeWorkers.push(worker);
   logger.info('Facebook lead processing worker started');
+}
+
+export function startReviewWorker(): void {
+  const worker = new Worker(
+    'review-requests',
+    reviewRequestProcessor,
+    getConnection(),
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Review request job completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Review request job failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err }, 'Review request worker error');
+  });
+
+  activeWorkers.push(worker);
+  logger.info('Review request worker started');
 }
 
 export async function startDailySummaryScheduler(): Promise<void> {

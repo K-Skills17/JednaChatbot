@@ -2,7 +2,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { formatDatePtBr } from '../../utils/timezone.utils';
 import { getCalendarClient, CalendarSlot } from './calendar.client';
-import { getReminderQueue } from '../../jobs/queue.setup';
+import { getReminderQueue, getReviewQueue } from '../../jobs/queue.setup';
 import { notificationService } from '../notification/notification.service';
 
 interface CreateBookingInput {
@@ -162,6 +162,22 @@ export class BookingService {
       where: { id },
       data: { status: 'completed' },
     });
+
+    // Schedule review request (2 hours after completion by default)
+    const tenant = await prisma.tenant.findUnique({ where: { id: booking.tenantId } });
+    const reviewConfig = (tenant?.reviewConfig as { delayHours?: number } | null) ?? {};
+    const delayMs = (reviewConfig.delayHours ?? 2) * 60 * 60 * 1000;
+
+    try {
+      await getReviewQueue().add(
+        'review-request',
+        { bookingId: id, tenantId: booking.tenantId, contactId: booking.contactId },
+        { delay: delayMs, removeOnComplete: 100, removeOnFail: 50 },
+      );
+      logger.info({ bookingId: id, delayMs }, 'Review request scheduled');
+    } catch (err) {
+      logger.warn({ err, bookingId: id }, 'Failed to schedule review request (non-fatal)');
+    }
 
     logger.info({ bookingId: id }, 'Booking marked as completed');
     return updated as BookingWithDetails;
