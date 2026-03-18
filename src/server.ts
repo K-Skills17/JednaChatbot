@@ -10,6 +10,7 @@ import {
   startNotificationWorker,
   startFacebookLeadWorker,
   startReviewWorker,
+  startReviewExpirationScheduler,
   startDailySummaryScheduler,
   stopAllWorkers,
 } from './jobs/queue.setup';
@@ -47,6 +48,7 @@ async function main() {
       startNotificationWorker();
       startFacebookLeadWorker();
       startReviewWorker();
+      await startReviewExpirationScheduler();
       await startDailySummaryScheduler();
     } catch (err) {
       logger.error({ err }, 'Failed to connect services — server running without workers');

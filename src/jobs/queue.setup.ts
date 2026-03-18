@@ -10,6 +10,7 @@ import { notificationProcessor } from './notification.processor';
 import { facebookLeadProcessor } from '../modules/facebook/facebook.lead.processor';
 import { dailySummaryProcessor } from './daily-summary.processor';
 import { reviewRequestProcessor } from './review-request.processor';
+import { reviewExpirationProcessor } from './review-expiration.processor';
 
 function getConnection() {
   return { connection: buildRedisOptions(env.REDIS_URL) };
@@ -59,6 +60,12 @@ let _reviewQueue: Queue | null = null;
 export function getReviewQueue(): Queue {
   if (!_reviewQueue) _reviewQueue = new Queue('review-requests', getConnection());
   return _reviewQueue;
+}
+
+let _reviewExpirationQueue: Queue | null = null;
+function getReviewExpirationQueue(): Queue {
+  if (!_reviewExpirationQueue) _reviewExpirationQueue = new Queue('review-expiration', getConnection());
+  return _reviewExpirationQueue;
 }
 
 let _dailySummaryQueue: Queue | null = null;
@@ -252,6 +259,39 @@ export function startReviewWorker(): void {
 
   activeWorkers.push(worker);
   logger.info('Review request worker started');
+}
+
+export async function startReviewExpirationScheduler(): Promise<void> {
+  await getReviewExpirationQueue().add(
+    'review-expiration-tick',
+    {},
+    {
+      repeat: { pattern: '0 6 * * *' }, // Every day at 06:00 UTC (03:00 BRT)
+      removeOnComplete: 10,
+      removeOnFail: 50,
+    },
+  );
+
+  const worker = new Worker(
+    'review-expiration',
+    reviewExpirationProcessor,
+    getConnection(),
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Review expiration tick completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Review expiration tick failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err }, 'Review expiration worker error');
+  });
+
+  activeWorkers.push(worker);
+  logger.info('Review expiration scheduler started (daily at 06:00 UTC)');
 }
 
 export async function startDailySummaryScheduler(): Promise<void> {

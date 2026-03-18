@@ -263,6 +263,11 @@ O contato quer agendar. Sugira 2-3 horários disponíveis nos próximos dias út
 Confirme data e horário escolhidos. Mude o estado para "closed" quando o agendamento for confirmado.
 (Nota: o agendamento real será feito pelo sistema — sua função é coletar a preferência de data/hora.)`;
 
+    case 'awaiting_review':
+      return `## Fase Atual: Aguardando Avaliação
+Uma solicitação de avaliação foi enviada ao contato. Aguarde a resposta com uma nota de 1 a 5.
+Se o contato enviar outro assunto, responda normalmente e mantenha o estado.`;
+
     case 'closed':
       return `## Fase Atual: Encerrado
 A conversa principal foi concluída. Responda a perguntas adicionais de forma breve.

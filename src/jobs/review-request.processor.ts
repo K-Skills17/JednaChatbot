@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
 import { sendMessage } from '../modules/whatsapp/message.sender';
 import { reviewService } from '../modules/review/review.service';
+import { ConversationContext } from '../ai/ai.types';
 
 interface ReviewRequestJobData {
   bookingId: string;
@@ -18,8 +19,8 @@ interface ReviewConfig {
 
 /**
  * Sends a review request message via WhatsApp after a booking is completed.
- * Triggered by the reminder processor when a booking transitions to "completed",
- * or scheduled as a delayed job after booking completion.
+ * Sets the conversation to awaiting_review state so the AI engine can
+ * intercept rating responses without burning an AI call.
  */
 export async function reviewRequestProcessor(job: Job<ReviewRequestJobData>): Promise<void> {
   const { bookingId, tenantId, contactId } = job.data;
@@ -51,20 +52,20 @@ export async function reviewRequestProcessor(job: Job<ReviewRequestJobData>): Pr
     return;
   }
 
-  // Check if we already sent a review request for this booking
+  // Check if we already sent a review request for this booking (any non-pending status)
   const existing = await prisma.review.findFirst({
-    where: { tenantId, contactId, bookingId, status: { in: ['sent', 'responded'] } },
+    where: { tenantId, contactId, bookingId, status: { in: ['pending', 'sent', 'responded'] } },
   });
 
   if (existing) {
-    logger.info({ bookingId }, 'Review request already sent for this booking');
+    logger.info({ bookingId }, 'Review request already exists for this booking');
     return;
   }
 
   // Create the review record
   const review = await reviewService.createReviewRequest(tenantId, contactId, bookingId);
 
-  // Find conversation
+  // Find conversation (reopen if closed)
   const conversation = await prisma.conversation.findFirst({
     where: { tenantId, contactId, status: { in: ['active', 'closed'] } },
     orderBy: { startedAt: 'desc' },
@@ -78,15 +79,19 @@ export async function reviewRequestProcessor(job: Job<ReviewRequestJobData>): Pr
   // Build review message
   const config = (booking.tenant.reviewConfig as ReviewConfig) ?? {};
   const contactName = booking.contact.name ?? '';
-  const reviewLink = config.googleUrl || config.facebookUrl || null;
+  const hasExternalLink = !!(config.googleUrl || config.facebookUrl);
 
-  let reviewText = `Oi${contactName ? ` ${contactName}` : ''}! Esperamos que tudo tenha corrido bem na sua consulta. ` +
-    `Sua opiniao e muito importante para nos! `;
-
-  if (reviewLink) {
-    reviewText += `\n\nPoderia nos avaliar? Leva menos de 1 minuto:\n${reviewLink}`;
+  let reviewText: string;
+  if (hasExternalLink) {
+    const link = config.googleUrl || config.facebookUrl;
+    reviewText = `Oi${contactName ? ` ${contactName}` : ''}! Esperamos que tudo tenha corrido bem na sua consulta. ` +
+      `Sua opiniao e muito importante para nos! ` +
+      `\n\nPoderia nos avaliar? Leva menos de 1 minuto:\n${link}` +
+      `\n\nOu se preferir, responda aqui com uma nota de 1 a 5.`;
   } else {
-    reviewText += `\n\nDe 1 a 5, como voce avaliaria seu atendimento? Responda com um numero.`;
+    reviewText = `Oi${contactName ? ` ${contactName}` : ''}! Esperamos que tudo tenha corrido bem na sua consulta. ` +
+      `Sua opiniao e muito importante para nos! ` +
+      `\n\nDe 1 a 5, como voce avaliaria seu atendimento? Responda com um numero.`;
   }
 
   await sendMessage({
@@ -99,5 +104,26 @@ export async function reviewRequestProcessor(job: Job<ReviewRequestJobData>): Pr
 
   await reviewService.markSent(review.id);
 
-  logger.info({ bookingId, contactId, reviewId: review.id }, 'Review request sent');
+  // Set conversation to awaiting_review state with the review ID
+  const existingContext = (conversation.context as ConversationContext | null) ?? {
+    state: 'closed' as const,
+    extractedData: {},
+    qualificationComplete: true,
+    messageCount: 0,
+  };
+
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      status: 'active', // Reopen conversation to receive reply
+      context: {
+        ...existingContext,
+        state: 'awaiting_review',
+        pendingReviewId: review.id,
+      },
+      lastMessageAt: new Date(),
+    },
+  });
+
+  logger.info({ bookingId, contactId, reviewId: review.id }, 'Review request sent, conversation set to awaiting_review');
 }
