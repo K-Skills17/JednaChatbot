@@ -11,6 +11,8 @@ import { registerTrainingRoutes } from './modules/training/training.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
 import { registerFacebookWebhookRoutes } from './modules/facebook/facebook.webhook';
 import { registerAuditLeadRoutes } from './modules/whatsapp/audit-lead.handler';
+import { registerBillingRoutes } from './modules/billing/billing.routes';
+import { registerStripeWebhookRoutes } from './modules/billing/stripe.webhook';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
@@ -179,6 +181,8 @@ export async function buildApp() {
   app.register(async (instance) => registerCampaignRoutes(instance));
   app.register(async (instance) => registerAnalyticsRoutes(instance));
   app.register(async (instance) => registerTrainingRoutes(instance));
+  app.register(async (instance) => registerBillingRoutes(instance));
+  app.register(async (instance) => registerStripeWebhookRoutes(instance));
 
   // ─── Error Handler ────────────────────────────────────────
 
