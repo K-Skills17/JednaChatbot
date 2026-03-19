@@ -81,6 +81,12 @@ async function main() {
         closingMessage: 'Foi um prazer conversar com você! Se precisar de algo mais, é só mandar mensagem. Até logo! 😊',
         escalationRules: 'Escale para atendimento humano quando o contato pedir explicitamente para falar com uma pessoa, ou quando o assunto for urgente ou sensível.',
         forbiddenTopics: ['política', 'religião', 'concorrentes'],
+        widgetConfig: {
+          primaryColor: '#c5a368',
+          headerTitle: 'LK Digital',
+          welcomeMessage: 'Olá! Como posso ajudar?',
+          position: 'bottom-right',
+        },
       },
       notificationConfig: {
         newLead: true,
