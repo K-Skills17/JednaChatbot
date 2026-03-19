@@ -3,6 +3,7 @@ import { getOrCreateSession, processWebMessage, getMessages } from './webchat.se
 import { getWidgetScript } from './widget';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
+import { prisma } from '../../config/database';
 
 export function registerWebChatRoutes(app: FastifyInstance): void {
 
@@ -15,6 +16,41 @@ export function registerWebChatRoutes(app: FastifyInstance): void {
       .type('application/javascript')
       .header('Cache-Control', 'public, max-age=300')
       .send(script);
+  });
+
+  // ── Widget config (public, no auth) ──────────────────────────
+  // Reads branding from aiConfig.widgetConfig so no extra DB column is needed.
+  app.get('/api/webchat/:tenantId/config', async (request, reply) => {
+    const { tenantId } = request.params as { tenantId: string };
+
+    try {
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          businessName: true,
+          aiConfig: true,
+        },
+      });
+
+      if (!tenant) {
+        return reply.code(404).send({ error: 'Not found' });
+      }
+
+      const aiConfig = (tenant.aiConfig ?? {}) as Record<string, any>;
+      const widget = (aiConfig.widgetConfig ?? {}) as Record<string, any>;
+
+      return reply.send({
+        primaryColor: widget.primaryColor ?? '#2563eb',
+        headerTitle: widget.headerTitle ?? tenant.businessName,
+        welcomeMessage: widget.welcomeMessage ?? aiConfig.greeting ?? null,
+        position: widget.position ?? 'bottom-right',
+        avatarUrl: widget.avatarUrl ?? null,
+        bubbleIcon: widget.bubbleIcon ?? 'chat',
+      });
+    } catch (err: any) {
+      logger.error({ err, tenantId }, 'Failed to load widget config');
+      return reply.code(500).send({ error: 'Internal error' });
+    }
   });
 
   // ── Start or resume a chat session ────────────────────────

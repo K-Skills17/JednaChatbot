@@ -71,6 +71,7 @@ export function registerTrainingRoutes(app: FastifyInstance): void {
       if (body.qualificationCriteria !== undefined) aiConfig.qualificationCriteria = body.qualificationCriteria;
       if (body.forbiddenTopics !== undefined) aiConfig.forbiddenTopics = body.forbiddenTopics;
       if (body.systemPrompt !== undefined) aiConfig.systemPrompt = body.systemPrompt;
+      if (body.widgetConfig !== undefined) aiConfig.widgetConfig = body.widgetConfig;
 
       const tenant = await tenantService.update(tenantId, { aiConfig: aiConfig as any });
       return reply.send({ success: true, tenant });

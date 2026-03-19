@@ -77,12 +77,27 @@ export class TenantService {
     return { tenants, total, page, limit };
   }
 
-  /** Update a tenant */
+  /** Update a tenant (deep-merges JSON fields so partial updates don't overwrite) */
   async update(id: string, input: UpdateTenantInput) {
     if (input.whatsappNumber) {
       const normalized = normalizeBrazilianPhone(input.whatsappNumber);
       if (!normalized) throw new Error(`Invalid Brazilian phone number: ${input.whatsappNumber}`);
       input.whatsappNumber = normalized;
+    }
+
+    // Deep-merge JSON config fields with existing values
+    if (input.aiConfig != null || input.notificationConfig != null) {
+      const existing = await prisma.tenant.findUnique({ where: { id } });
+      if (!existing) throw new Error('Tenant not found');
+
+      if (input.aiConfig != null) {
+        const current = (existing.aiConfig as Record<string, any>) ?? {};
+        input.aiConfig = { ...current, ...input.aiConfig } as any;
+      }
+      if (input.notificationConfig != null) {
+        const current = (existing.notificationConfig as Record<string, any>) ?? {};
+        input.notificationConfig = { ...current, ...input.notificationConfig } as any;
+      }
     }
 
     return prisma.tenant.update({ where: { id }, data: input });
