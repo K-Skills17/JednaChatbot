@@ -110,6 +110,7 @@ model Contact {
   phone             String
   name              String?
   email             String?
+  channel           String    @default("whatsapp") // whatsapp, web
   leadScore         Int       @default(0) @map("lead_score")
   leadStatus        String    @default("new") @map("lead_status") // new, qualifying, qualified, booked, lost
   qualificationData Json?     @map("qualification_data")
@@ -137,6 +138,7 @@ model Conversation {
   id            String    @id @default(uuid())
   tenantId      String    @map("tenant_id")
   contactId     String    @map("contact_id")
+  channel       String    @default("whatsapp") // whatsapp, web
   status        String    @default("active") // active, paused, closed, escalated
   context       Json?     // AI conversation summary/context
   startedAt     DateTime  @default(now()) @map("started_at")

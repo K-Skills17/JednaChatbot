@@ -20,6 +20,7 @@ import { registerReviewRoutes } from './modules/review/review.routes';
 import { registerAuthRoutes } from './modules/auth/auth.routes';
 import { registerContactRoutes } from './modules/contact/contact.routes';
 import { registerAdminRoutes } from './modules/admin/admin.routes';
+import { registerWebChatRoutes } from './modules/webchat/webchat.routes';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
@@ -198,6 +199,16 @@ export async function buildApp() {
   app.register(async (instance) => registerAuthRoutes(instance));
   app.register(async (instance) => registerContactRoutes(instance));
   app.register(async (instance) => registerAdminRoutes(instance));
+
+  // Web chat widget — open CORS so any site can embed it
+  app.register(async (instance) => {
+    instance.addHook('onRequest', async (_request, reply) => {
+      reply.header('Access-Control-Allow-Origin', '*');
+      reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      reply.header('Access-Control-Allow-Headers', 'Content-Type');
+    });
+    registerWebChatRoutes(instance);
+  });
 
   // ─── Client Portal (React SPA) ─────────────────────────────
   const portalDistDir = path.join(__dirname, '..', 'client', 'dist');
