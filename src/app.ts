@@ -200,12 +200,17 @@ export async function buildApp() {
   app.register(async (instance) => registerContactRoutes(instance));
   app.register(async (instance) => registerAdminRoutes(instance));
 
-  // Web chat widget — open CORS so any site can embed it
+  // Web chat widget — open CORS so any site can embed it.
+  // We use a preHandler hook instead of registering @fastify/cors again,
+  // because Fastify does not allow the corsPreflightEnabled decorator twice.
   app.register(async (instance) => {
-    await instance.register(cors, {
-      origin: '*',
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type'],
+    instance.addHook('preHandler', async (request, reply) => {
+      reply.header('Access-Control-Allow-Origin', '*');
+      reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      reply.header('Access-Control-Allow-Headers', 'Content-Type');
+      if (request.method === 'OPTIONS') {
+        return reply.code(204).send();
+      }
     });
     registerWebChatRoutes(instance);
   });
