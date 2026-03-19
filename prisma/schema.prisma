@@ -20,6 +20,7 @@ model Tenant {
   bookingConfig       Json?    @map("booking_config")
   notificationConfig  Json?    @map("notification_config")
   reviewConfig        Json?    @map("review_config")  // { googleUrl?, facebookUrl?, delayHours? }
+  widgetConfig        Json?    @map("widget_config")  // { primaryColor?, headerTitle?, welcomeMessage?, position?, avatarUrl? }
   status              String   @default("onboarding") // onboarding, active, suspended
   plan                String   @default("starter")    // starter, pro, enterprise
   stripeCustomerId    String?  @unique @map("stripe_customer_id")

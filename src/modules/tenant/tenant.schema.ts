@@ -36,6 +36,16 @@ export const createTenantSchema = z.object({
       forbiddenTopics: z.array(z.string()).optional(), // Topics the bot must NOT discuss
     })
     .default({ model: 'claude', temperature: 0.7, qualificationCriteria: [], tone: 'friendly' as const }),
+  widgetConfig: z
+    .object({
+      primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#2563eb'),
+      headerTitle: z.string().max(60).optional(),           // defaults to businessName
+      welcomeMessage: z.string().max(500).optional(),       // auto-greeting when chat opens
+      position: z.enum(['bottom-right', 'bottom-left']).default('bottom-right'),
+      avatarUrl: z.string().url().optional(),               // custom bot avatar
+      bubbleIcon: z.enum(['chat', 'message', 'help']).default('chat'),
+    })
+    .optional(),
   notificationConfig: z
     .object({
       newLead: z.boolean().default(true),
