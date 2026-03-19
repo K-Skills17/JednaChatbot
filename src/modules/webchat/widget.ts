@@ -162,14 +162,21 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: sessionId })
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Session request failed: ' + r.status);
+      return r.json();
+    })
     .then(function(data) {
+      if (!data.sessionId) throw new Error('No sessionId in response');
       sessionId = data.sessionId;
       localStorage.setItem(SESSION_KEY, sessionId);
       // Load existing messages if resuming
       return fetch(BASE_URL + '/api/webchat/' + TENANT_ID + '/messages/' + sessionId);
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) return { messages: [] };
+      return r.json();
+    })
     .then(function(data) {
       if (data.messages && data.messages.length > 0) {
         data.messages.forEach(function(m) {
@@ -177,7 +184,10 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
         });
       }
     })
-    .catch(function(err) { console.error('LK Chat: session init failed', err); });
+    .catch(function(err) {
+      console.error('LK Chat: session init failed', err);
+      addMessage('Não foi possível conectar ao assistente. Tente novamente.', 'lk-msg-bot');
+    });
   }
 
   function send() {
