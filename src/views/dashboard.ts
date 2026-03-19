@@ -525,7 +525,7 @@ export function dashboardHtml(): string {
   <div class="modal">
     <h3>Create New Tenant</h3>
     <div class="form-field"><label>Business Name *</label><input id="nt-name" placeholder="Clinica Dental SP" /></div>
-    <div class="form-field"><label>WhatsApp Number *</label><input id="nt-phone" placeholder="5511999998888" /></div>
+    <div class="form-field"><label>WhatsApp Number <span style="color:#94a3b8;font-weight:normal">(optional for web-only)</span></label><input id="nt-phone" placeholder="5511999998888 or leave empty for web chat only" /></div>
     <div class="form-field"><label>Plan</label>
       <select id="nt-plan"><option value="starter">Starter</option><option value="pro">Pro</option><option value="enterprise">Enterprise</option></select>
     </div>
@@ -914,18 +914,20 @@ export function dashboardHtml(): string {
     var phone = document.getElementById('nt-phone').value.trim();
     var plan = document.getElementById('nt-plan').value;
     var ai = document.getElementById('nt-ai').value;
-    if (!name || !phone) {
+    if (!name) {
       var err = document.getElementById('nt-error');
-      err.textContent = 'Business name and WhatsApp number are required.';
+      err.textContent = 'Business name is required.';
       err.style.display = 'block';
       return;
     }
     var btn = document.getElementById('btn-create-tenant');
     btn.disabled = true;
     btn.textContent = 'Creating...';
+    var payload = { businessName: name, plan: plan, aiConfig: { model: ai } };
+    if (phone) payload.whatsappNumber = phone;
     apiFetch('/api/tenants', {
       method: 'POST',
-      body: JSON.stringify({ businessName: name, whatsappNumber: phone, plan: plan, aiConfig: { model: ai } }),
+      body: JSON.stringify(payload),
     }).then(function(res) {
       if (res.ok) {
         document.getElementById('nt-name').value = '';

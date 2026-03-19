@@ -12,7 +12,7 @@ datasource db {
 model Tenant {
   id                  String   @id @default(uuid())
   businessName        String   @map("business_name")
-  whatsappNumber      String   @unique @map("whatsapp_number")
+  whatsappNumber      String?  @unique @map("whatsapp_number")
   evolutionInstanceId String?  @map("evolution_instance_id")
   timezone            String   @default("America/Sao_Paulo")
   businessHours       Json     @map("business_hours")

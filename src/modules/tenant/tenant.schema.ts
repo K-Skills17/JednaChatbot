@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const createTenantSchema = z.object({
   businessName: z.string().min(1).max(255),
-  whatsappNumber: z.string().min(10).max(20),
+  whatsappNumber: z.string().min(10).max(20).optional(),
   timezone: z.string().default('America/Sao_Paulo'),
   businessHours: z
     .object({
