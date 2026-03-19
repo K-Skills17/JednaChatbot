@@ -19,6 +19,7 @@ export function registerWebChatRoutes(app: FastifyInstance): void {
   });
 
   // ── Widget config (public, no auth) ──────────────────────────
+  // Reads branding from aiConfig.widgetConfig so no extra DB column is needed.
   app.get('/api/webchat/:tenantId/config', async (request, reply) => {
     const { tenantId } = request.params as { tenantId: string };
 
@@ -27,7 +28,6 @@ export function registerWebChatRoutes(app: FastifyInstance): void {
         where: { id: tenantId },
         select: {
           businessName: true,
-          widgetConfig: true,
           aiConfig: true,
         },
       });
@@ -36,8 +36,8 @@ export function registerWebChatRoutes(app: FastifyInstance): void {
         return reply.code(404).send({ error: 'Not found' });
       }
 
-      const widget = (tenant.widgetConfig ?? {}) as Record<string, any>;
       const aiConfig = (tenant.aiConfig ?? {}) as Record<string, any>;
+      const widget = (aiConfig.widgetConfig ?? {}) as Record<string, any>;
 
       return reply.send({
         primaryColor: widget.primaryColor ?? '#2563eb',
