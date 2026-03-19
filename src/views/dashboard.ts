@@ -522,20 +522,72 @@ export function dashboardHtml(): string {
 
 <!-- NEW TENANT MODAL -->
 <div class="modal-overlay" id="new-tenant-modal">
-  <div class="modal">
+  <div class="modal" style="max-width:520px">
     <h3>Create New Tenant</h3>
     <div class="form-field"><label>Business Name *</label><input id="nt-name" placeholder="Clinica Dental SP" /></div>
     <div class="form-field"><label>WhatsApp Number <span style="color:#94a3b8;font-weight:normal">(optional for web-only)</span></label><input id="nt-phone" placeholder="5511999998888 or leave empty for web chat only" /></div>
-    <div class="form-field"><label>Plan</label>
-      <select id="nt-plan"><option value="starter">Starter</option><option value="pro">Pro</option><option value="enterprise">Enterprise</option></select>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-field"><label>Plan</label>
+        <select id="nt-plan"><option value="starter">Starter</option><option value="pro">Pro</option><option value="enterprise">Enterprise</option></select>
+      </div>
+      <div class="form-field"><label>AI Provider</label>
+        <select id="nt-ai"><option value="claude">Claude</option><option value="openai">OpenAI</option></select>
+      </div>
     </div>
-    <div class="form-field"><label>AI Provider</label>
-      <select id="nt-ai"><option value="claude">Claude</option><option value="openai">OpenAI</option></select>
+    <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Widget Branding</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-field"><label>Primary Color</label><div style="display:flex;gap:8px;align-items:center"><input id="nt-color" type="color" value="#c5a368" style="width:40px;height:32px;padding:2px;cursor:pointer" /><input id="nt-color-text" value="#c5a368" placeholder="#c5a368" style="flex:1" /></div></div>
+        <div class="form-field"><label>Widget Position</label>
+          <select id="nt-position"><option value="bottom-right">Bottom Right</option><option value="bottom-left">Bottom Left</option></select>
+        </div>
+      </div>
+      <div class="form-field"><label>Header Title <span style="color:#94a3b8;font-weight:normal">(defaults to business name)</span></label><input id="nt-header" placeholder="My Company" /></div>
+      <div class="form-field"><label>Welcome Message</label><input id="nt-welcome" placeholder="Olá! Como posso ajudar?" /></div>
     </div>
     <div id="nt-error" style="color:var(--red);font-size:13px;display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-sm btn-outline" id="btn-cancel-tenant">Cancel</button>
       <button class="btn btn-sm" id="btn-create-tenant">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- EMBED SNIPPET MODAL -->
+<div class="modal-overlay" id="embed-modal">
+  <div class="modal" style="max-width:560px">
+    <h3>Embed Chat Widget</h3>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Copy and paste this snippet into your client's website, just before the closing <code style="color:var(--accent-light)">&lt;/body&gt;</code> tag.</p>
+    <div style="position:relative">
+      <pre id="embed-code" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;color:var(--accent-light)"></pre>
+      <button class="btn btn-sm" id="btn-copy-embed" style="position:absolute;top:8px;right:8px;font-size:11px;padding:4px 10px">Copy</button>
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:var(--text-dim)">
+      <strong>Preview URL:</strong> <a id="embed-preview-link" href="#" target="_blank" style="font-size:12px"></a>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-outline" id="btn-close-embed">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- WIDGET CONFIG MODAL -->
+<div class="modal-overlay" id="widget-config-modal">
+  <div class="modal" style="max-width:480px">
+    <h3>Widget Branding</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-field"><label>Primary Color</label><div style="display:flex;gap:8px;align-items:center"><input id="wc-color" type="color" value="#c5a368" style="width:40px;height:32px;padding:2px;cursor:pointer" /><input id="wc-color-text" value="#c5a368" placeholder="#c5a368" style="flex:1" /></div></div>
+      <div class="form-field"><label>Position</label>
+        <select id="wc-position"><option value="bottom-right">Bottom Right</option><option value="bottom-left">Bottom Left</option></select>
+      </div>
+    </div>
+    <div class="form-field"><label>Header Title</label><input id="wc-header" placeholder="My Company" /></div>
+    <div class="form-field"><label>Welcome Message</label><input id="wc-welcome" placeholder="Olá! Como posso ajudar?" /></div>
+    <div id="wc-error" style="color:var(--red);font-size:13px;display:none"></div>
+    <div id="wc-success" style="color:var(--green);font-size:13px;display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-sm btn-outline" id="btn-cancel-widget">Cancel</button>
+      <button class="btn btn-sm" id="btn-save-widget">Save</button>
     </div>
   </div>
 </div>
@@ -749,6 +801,8 @@ export function dashboardHtml(): string {
         + '<td>' + esc((t.aiConfig && t.aiConfig.model) || t.aiProvider || 'claude') + '</td>'
         + '<td>' + date + '</td>'
         + '<td>'
+        + '<a href="#" class="action-link" data-embed-tenant="' + t.id + '" style="color:var(--green);font-weight:600">Embed</a>'
+        + '<a href="#" class="action-link" data-widget-tenant="' + t.id + '" style="color:var(--yellow)">Widget</a>'
         + '<a href="#" class="action-link" data-connect-tenant="' + t.id + '" style="color:var(--green)">Connect</a>'
         + '<a href="#" class="action-link" data-status-tenant="' + t.id + '" style="color:var(--blue)">Status</a>'
         + '<a href="/train/' + t.id + '" target="_blank" class="action-link">Train</a>'
@@ -914,6 +968,10 @@ export function dashboardHtml(): string {
     var phone = document.getElementById('nt-phone').value.trim();
     var plan = document.getElementById('nt-plan').value;
     var ai = document.getElementById('nt-ai').value;
+    var color = document.getElementById('nt-color-text').value.trim() || '#c5a368';
+    var position = document.getElementById('nt-position').value;
+    var header = document.getElementById('nt-header').value.trim();
+    var welcome = document.getElementById('nt-welcome').value.trim();
     if (!name) {
       var err = document.getElementById('nt-error');
       err.textContent = 'Business name is required.';
@@ -923,7 +981,10 @@ export function dashboardHtml(): string {
     var btn = document.getElementById('btn-create-tenant');
     btn.disabled = true;
     btn.textContent = 'Creating...';
-    var payload = { businessName: name, plan: plan, aiConfig: { model: ai } };
+    var widgetConfig = { primaryColor: color, position: position };
+    if (header) widgetConfig.headerTitle = header;
+    if (welcome) widgetConfig.welcomeMessage = welcome;
+    var payload = { businessName: name, plan: plan, aiConfig: { model: ai, widgetConfig: widgetConfig } };
     if (phone) payload.whatsappNumber = phone;
     apiFetch('/api/tenants', {
       method: 'POST',
@@ -1241,6 +1302,104 @@ export function dashboardHtml(): string {
     });
   }
 
+  // ── Color picker sync ──────────────────────────
+  function syncColorPickers(colorInput, textInput) {
+    colorInput.addEventListener('input', function() { textInput.value = colorInput.value; });
+    textInput.addEventListener('input', function() {
+      if (/^#[0-9a-fA-F]{6}$/.test(textInput.value)) colorInput.value = textInput.value;
+    });
+  }
+  syncColorPickers(document.getElementById('nt-color'), document.getElementById('nt-color-text'));
+  syncColorPickers(document.getElementById('wc-color'), document.getElementById('wc-color-text'));
+
+  // ── Embed Snippet Modal ──────────────────────
+  function openEmbedModal(tenantId) {
+    var baseUrl = window.location.origin;
+    var snippet = '<script src="' + baseUrl + '/api/webchat/' + tenantId + '/widget.js"><\\/script>';
+    document.getElementById('embed-code').textContent = snippet.replace('<\\/script>', '</' + 'script>');
+    var previewUrl = baseUrl + '/api/webchat/' + tenantId + '/config';
+    var link = document.getElementById('embed-preview-link');
+    link.href = previewUrl;
+    link.textContent = previewUrl;
+    document.getElementById('embed-modal').classList.add('open');
+  }
+
+  function closeEmbedModal() {
+    document.getElementById('embed-modal').classList.remove('open');
+  }
+
+  function copyEmbedCode() {
+    var code = document.getElementById('embed-code').textContent;
+    navigator.clipboard.writeText(code).then(function() {
+      var btn = document.getElementById('btn-copy-embed');
+      btn.textContent = 'Copied!';
+      setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+    });
+  }
+
+  // ── Widget Config Modal ──────────────────────
+  var activeWidgetTenantId = null;
+
+  function openWidgetConfigModal(tenantId) {
+    activeWidgetTenantId = tenantId;
+    document.getElementById('wc-error').style.display = 'none';
+    document.getElementById('wc-success').style.display = 'none';
+    // Load current config
+    var tenant = tenantsCache.find(function(t) { return t.id === tenantId; });
+    var wc = (tenant && tenant.aiConfig && tenant.aiConfig.widgetConfig) || {};
+    document.getElementById('wc-color').value = wc.primaryColor || '#2563eb';
+    document.getElementById('wc-color-text').value = wc.primaryColor || '#2563eb';
+    document.getElementById('wc-position').value = wc.position || 'bottom-right';
+    document.getElementById('wc-header').value = wc.headerTitle || '';
+    document.getElementById('wc-welcome').value = wc.welcomeMessage || '';
+    document.getElementById('widget-config-modal').classList.add('open');
+  }
+
+  function closeWidgetConfigModal() {
+    activeWidgetTenantId = null;
+    document.getElementById('widget-config-modal').classList.remove('open');
+  }
+
+  function saveWidgetConfig() {
+    if (!activeWidgetTenantId) return;
+    var color = document.getElementById('wc-color-text').value.trim() || '#2563eb';
+    var position = document.getElementById('wc-position').value;
+    var header = document.getElementById('wc-header').value.trim();
+    var welcome = document.getElementById('wc-welcome').value.trim();
+    var widgetConfig = { primaryColor: color, position: position };
+    if (header) widgetConfig.headerTitle = header;
+    if (welcome) widgetConfig.welcomeMessage = welcome;
+    var btn = document.getElementById('btn-save-widget');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    document.getElementById('wc-error').style.display = 'none';
+    document.getElementById('wc-success').style.display = 'none';
+    apiFetch('/api/tenants/' + activeWidgetTenantId, {
+      method: 'PATCH',
+      body: JSON.stringify({ aiConfig: { widgetConfig: widgetConfig } }),
+    }).then(function(res) {
+      if (res.ok) {
+        document.getElementById('wc-success').textContent = 'Widget config saved! Changes are live.';
+        document.getElementById('wc-success').style.display = 'block';
+        loadTenants();
+        setTimeout(function() { closeWidgetConfigModal(); }, 1500);
+      } else {
+        return res.json().then(function(data) {
+          var err = document.getElementById('wc-error');
+          err.textContent = data.error || 'Failed to save widget config.';
+          err.style.display = 'block';
+        });
+      }
+    }).catch(function() {
+      var err = document.getElementById('wc-error');
+      err.textContent = 'Network error. Try again.';
+      err.style.display = 'block';
+    }).finally(function() {
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    });
+  }
+
   // ── Event Listeners (no inline handlers) ──────────
   document.getElementById('btn-connect').addEventListener('click', authenticate);
 
@@ -1288,6 +1447,10 @@ export function dashboardHtml(): string {
   document.getElementById('btn-confirm-delete').addEventListener('click', confirmDelete);
   document.getElementById('btn-close-wa').addEventListener('click', closeWaModal);
   document.getElementById('btn-check-wa-status').addEventListener('click', function() { checkWhatsAppStatus(); });
+  document.getElementById('btn-copy-embed').addEventListener('click', copyEmbedCode);
+  document.getElementById('btn-close-embed').addEventListener('click', closeEmbedModal);
+  document.getElementById('btn-cancel-widget').addEventListener('click', closeWidgetConfigModal);
+  document.getElementById('btn-save-widget').addEventListener('click', saveWidgetConfig);
 
   // New admin management listeners
   document.getElementById('btn-refresh-analytics').addEventListener('click', loadPlatformAnalytics);
@@ -1341,6 +1504,18 @@ export function dashboardHtml(): string {
     if (delAdmin) {
       e.preventDefault();
       deleteAdmin(delAdmin.getAttribute('data-delete-admin'));
+      return;
+    }
+    var embedEl = e.target.closest('[data-embed-tenant]');
+    if (embedEl) {
+      e.preventDefault();
+      openEmbedModal(embedEl.getAttribute('data-embed-tenant'));
+      return;
+    }
+    var widgetEl = e.target.closest('[data-widget-tenant]');
+    if (widgetEl) {
+      e.preventDefault();
+      openWidgetConfigModal(widgetEl.getAttribute('data-widget-tenant'));
       return;
     }
     var copyEl = e.target.closest('[data-copy-id]');
