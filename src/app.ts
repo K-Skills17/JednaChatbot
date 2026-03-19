@@ -202,14 +202,10 @@ export async function buildApp() {
 
   // Web chat widget — open CORS so any site can embed it
   app.register(async (instance) => {
-    instance.addHook('onRequest', async (request, reply) => {
-      reply.header('Access-Control-Allow-Origin', '*');
-      reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      reply.header('Access-Control-Allow-Headers', 'Content-Type');
-      // Handle CORS preflight
-      if (request.method === 'OPTIONS') {
-        return reply.code(204).send();
-      }
+    await instance.register(cors, {
+      origin: '*',
+      methods: ['GET', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type'],
     });
     registerWebChatRoutes(instance);
   });
