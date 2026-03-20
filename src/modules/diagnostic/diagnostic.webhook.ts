@@ -56,8 +56,14 @@ export function registerDiagnosticWebhookRoutes(app: FastifyInstance): void {
   app.post('/webhook/diagnostic', async (request: FastifyRequest, reply: FastifyReply) => {
     // ── Auth: HMAC signature or API key header ──
     if (!(await verifyDiagnosticAuth(request))) {
-      logger.warn({ ip: request.ip }, 'Diagnostic webhook authentication failed');
-      return reply.code(401).send({ error: 'Unauthorized' });
+      logger.warn(
+        { ip: request.ip, hasXApiKey: !!request.headers['x-api-key'], hasApiKey: !!request.headers['apikey'], hasAuth: !!request.headers['authorization'] },
+        'Diagnostic webhook authentication failed',
+      );
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        hint: 'Send your tenant API key via x-api-key, apikey, or Authorization: Bearer <key> header',
+      });
     }
 
     const body = request.body as DiagnosticPayload;
@@ -114,7 +120,12 @@ export function registerDiagnosticWebhookRoutes(app: FastifyInstance): void {
 // ── Authentication ──────────────────────────────────────────
 
 async function verifyDiagnosticAuth(request: FastifyRequest): Promise<boolean> {
-  const apiKey = request.headers['x-api-key'] as string | undefined;
+  // Accept key from multiple common header names
+  const apiKey = (
+    request.headers['x-api-key'] ??
+    request.headers['apikey'] ??
+    extractBearerToken(request.headers['authorization'])
+  ) as string | undefined;
 
   if (apiKey) {
     // Strategy 1: Global platform API key
@@ -130,6 +141,10 @@ async function verifyDiagnosticAuth(request: FastifyRequest): Promise<boolean> {
     if (tenant) {
       return true;
     }
+
+    logger.warn({ keyPrefix: apiKey.slice(0, 6) }, 'Diagnostic auth: API key provided but not recognized');
+  } else {
+    logger.debug('Diagnostic auth: no API key header found');
   }
 
   // Strategy 3: HMAC-SHA256 signature via x-diagnostic-signature header
@@ -162,4 +177,11 @@ async function verifyDiagnosticAuth(request: FastifyRequest): Promise<boolean> {
   }
 
   return false;
+}
+
+/** Extract token from "Bearer <token>" header */
+function extractBearerToken(header: string | string[] | undefined): string | undefined {
+  if (typeof header !== 'string') return undefined;
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1];
 }
