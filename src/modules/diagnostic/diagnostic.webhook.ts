@@ -55,7 +55,7 @@ export function registerDiagnosticWebhookRoutes(app: FastifyInstance): void {
 
   app.post('/webhook/diagnostic', async (request: FastifyRequest, reply: FastifyReply) => {
     // ── Auth: HMAC signature or API key header ──
-    if (!verifyDiagnosticAuth(request)) {
+    if (!(await verifyDiagnosticAuth(request))) {
       logger.warn({ ip: request.ip }, 'Diagnostic webhook authentication failed');
       return reply.code(401).send({ error: 'Unauthorized' });
     }
@@ -113,14 +113,26 @@ export function registerDiagnosticWebhookRoutes(app: FastifyInstance): void {
 
 // ── Authentication ──────────────────────────────────────────
 
-function verifyDiagnosticAuth(request: FastifyRequest): boolean {
-  // Strategy 1: x-api-key header matches tenant or global API key
+async function verifyDiagnosticAuth(request: FastifyRequest): Promise<boolean> {
   const apiKey = request.headers['x-api-key'] as string | undefined;
-  if (apiKey && apiKey === env.API_KEY) {
-    return true;
+
+  if (apiKey) {
+    // Strategy 1: Global platform API key
+    if (apiKey === env.API_KEY) {
+      return true;
+    }
+
+    // Strategy 2: Per-tenant API key (stored in Tenant.apiKey column)
+    const tenant = await prisma.tenant.findFirst({
+      where: { apiKey, status: 'active' },
+      select: { id: true },
+    });
+    if (tenant) {
+      return true;
+    }
   }
 
-  // Strategy 2: HMAC-SHA256 signature via x-diagnostic-signature header
+  // Strategy 3: HMAC-SHA256 signature via x-diagnostic-signature header
   const secret = env.DIAGNOSTIC_WEBHOOK_SECRET;
   if (secret) {
     const signature = request.headers['x-diagnostic-signature'] as string | undefined;
@@ -143,7 +155,7 @@ function verifyDiagnosticAuth(request: FastifyRequest): boolean {
     }
   }
 
-  // Strategy 3: Allow in development without auth
+  // Strategy 4: Allow in development without auth
   if (env.NODE_ENV === 'development') {
     logger.warn('Diagnostic webhook received without authentication (dev mode)');
     return true;
