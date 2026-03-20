@@ -11,6 +11,7 @@ import { facebookLeadProcessor } from '../modules/facebook/facebook.lead.process
 import { dailySummaryProcessor } from './daily-summary.processor';
 import { reviewRequestProcessor } from './review-request.processor';
 import { reviewExpirationProcessor } from './review-expiration.processor';
+import { diagnosticProcessor } from '../modules/diagnostic/diagnostic.processor';
 
 function getConnection() {
   return { connection: buildRedisOptions(env.REDIS_URL) };
@@ -66,6 +67,12 @@ let _reviewExpirationQueue: Queue | null = null;
 function getReviewExpirationQueue(): Queue {
   if (!_reviewExpirationQueue) _reviewExpirationQueue = new Queue('review-expiration', getConnection());
   return _reviewExpirationQueue;
+}
+
+let _diagnosticQueue: Queue | null = null;
+export function getDiagnosticQueue(): Queue {
+  if (!_diagnosticQueue) _diagnosticQueue = new Queue('diagnostic-results', getConnection());
+  return _diagnosticQueue;
 }
 
 let _dailySummaryQueue: Queue | null = null;
@@ -259,6 +266,32 @@ export function startReviewWorker(): void {
 
   activeWorkers.push(worker);
   logger.info('Review request worker started');
+}
+
+export function startDiagnosticWorker(): void {
+  const worker = new Worker(
+    'diagnostic-results',
+    diagnosticProcessor,
+    {
+      ...getConnection(),
+      concurrency: 3,
+    },
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Diagnostic job completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Diagnostic job failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err }, 'Diagnostic worker error');
+  });
+
+  activeWorkers.push(worker);
+  logger.info('Diagnostic processing worker started');
 }
 
 export async function startReviewExpirationScheduler(): Promise<void> {
