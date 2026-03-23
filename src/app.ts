@@ -49,11 +49,24 @@ export async function buildApp() {
   // ─── Plugins ──────────────────────────────────────────────
 
   await app.register(cors, {
-    origin: env.NODE_ENV === 'production'
-      ? [env.WEBHOOK_BASE_URL, `${env.WEBHOOK_BASE_URL}/portal`]
-      : true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    credentials: true,
+    delegator: (req, callback) => {
+      // Webchat widget routes must be embeddable on any site
+      if (req.url.startsWith('/api/webchat/')) {
+        return callback(null, {
+          origin: true,
+          methods: ['GET', 'POST', 'OPTIONS'],
+          credentials: false,
+        });
+      }
+      // All other routes: restrict to our own domain in production
+      callback(null, {
+        origin: env.NODE_ENV === 'production'
+          ? [env.WEBHOOK_BASE_URL, `${env.WEBHOOK_BASE_URL}/portal`]
+          : true,
+        methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+        credentials: true,
+      });
+    },
   });
 
   await app.register(helmet, {
@@ -202,20 +215,8 @@ export async function buildApp() {
   app.register(async (instance) => registerAdminRoutes(instance));
   app.register(async (instance) => registerDiagnosticWebhookRoutes(instance));
 
-  // Web chat widget — open CORS so any site can embed it.
-  // We use an onRequest hook (not preHandler) so it runs before the global
-  // @fastify/cors plugin can reject the preflight OPTIONS request.
-  app.register(async (instance) => {
-    instance.addHook('onRequest', async (request, reply) => {
-      reply.header('Access-Control-Allow-Origin', '*');
-      reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      reply.header('Access-Control-Allow-Headers', 'Content-Type');
-      if (request.method === 'OPTIONS') {
-        return reply.code(204).send();
-      }
-    });
-    registerWebChatRoutes(instance);
-  });
+  // Web chat widget — CORS is handled by the global delegator above
+  app.register(async (instance) => registerWebChatRoutes(instance));
 
   // ─── Client Portal (React SPA) ─────────────────────────────
   const portalDistDir = path.join(__dirname, '..', 'client', 'dist');
