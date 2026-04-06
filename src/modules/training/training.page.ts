@@ -85,7 +85,7 @@ export function trainingPageHtml(tenantId: string): string {
 
 <div class="header">
   <h1>LK Chatbot — Treinamento</h1>
-  <p>Configure o que seu chatbot sabe, como ele fala e como qualifica leads</p>
+  <p>Configure o que seu chatbot sabe, como ele fala e como qualifica leads (Hormozi-Powered)</p>
 </div>
 
 <div class="container">
@@ -143,10 +143,62 @@ export function trainingPageHtml(tenantId: string): string {
     </div>
   </div>
 
+  <!-- Hormozi: Sales Psychology -->
+  <div class="card">
+    <h2>Psicologia de Vendas (Hormozi)</h2>
+    <p class="subtitle">Elementos que tornam sua oferta irresistivel — baseado nos frameworks $100M Offers e $100M Leads</p>
+
+    <div class="field">
+      <label class="field-label">Dream Outcome (A grande transformacao que voce entrega)</label>
+      <textarea id="dreamOutcome" rows="2" placeholder="Ex: Ter um sistema digital completo que gera clientes no piloto automatico"></textarea>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Mecanismo Unico (Por que VOCE e diferente)</label>
+      <textarea id="uniqueMechanism" rows="2" placeholder="Ex: Diferente de agencias tradicionais, entregamos um SISTEMA integrado, nao so um site bonito"></textarea>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Escassez (Limite real de capacidade)</label>
+      <input type="text" id="scarcity" placeholder="Ex: Aceitamos apenas 5 novos clientes por mes">
+    </div>
+
+    <div class="field">
+      <label class="field-label">Urgencia (Motivo para agir agora)</label>
+      <input type="text" id="urgency" placeholder="Ex: Cada dia sem otimizacao sao clientes indo pro concorrente">
+    </div>
+
+    <div class="field">
+      <label class="field-label">Lead Magnet (Oferta gratuita para quem nao esta pronto)</label>
+      <textarea id="leadMagnet" rows="2" placeholder="Ex: Auditoria Digital Gratuita — analisamos 30+ pontos e entregamos relatorio completo"></textarea>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Incentivo de Indicacao</label>
+      <input type="text" id="referralIncentive" placeholder="Ex: Para cada indicacao que fechar, voce ganha 1 mes gratis de manutencao">
+    </div>
+  </div>
+
+  <!-- Hormozi: Pain Points -->
+  <div class="card">
+    <h2>Dores do Publico-Alvo</h2>
+    <p class="subtitle">Dores comuns que o bot investiga na conversa — quanto mais precisas, maior a conversao</p>
+    <div class="list-section" id="painPointsList"></div>
+    <button class="btn-add" id="btn-add-pain">+ Adicionar dor</button>
+  </div>
+
+  <!-- Hormozi: Social Proof -->
+  <div class="card">
+    <h2>Provas Sociais</h2>
+    <p class="subtitle">Depoimentos, numeros e casos de sucesso que o bot usa naturalmente na conversa</p>
+    <div class="list-section" id="socialProofList"></div>
+    <button class="btn-add" id="btn-add-proof">+ Adicionar prova social</button>
+  </div>
+
   <!-- Services -->
   <div class="card">
-    <h2>Servicos / Produtos</h2>
-    <p class="subtitle">O bot so vai mencionar os servicos listados aqui — nao inventa nada</p>
+    <h2>Servicos / Ofertas (Grand Slam Offers)</h2>
+    <p class="subtitle">O bot so vai mencionar os servicos listados aqui. Inclua value stack, bonus e garantias para maximizar conversao</p>
     <div class="list-section" id="servicesList"></div>
     <button class="btn-add" id="btn-add-service">+ Adicionar servico</button>
   </div>
@@ -238,6 +290,20 @@ function populateForm(cfg) {
   document.getElementById('escalationRules').value = cfg.escalationRules || '';
   document.getElementById('systemPrompt').value = cfg.systemPrompt || '';
 
+  // Hormozi fields
+  document.getElementById('dreamOutcome').value = cfg.dreamOutcome || '';
+  document.getElementById('uniqueMechanism').value = cfg.uniqueMechanism || '';
+  document.getElementById('scarcity').value = cfg.scarcity || '';
+  document.getElementById('urgency').value = cfg.urgency || '';
+  document.getElementById('leadMagnet').value = cfg.leadMagnet || '';
+  document.getElementById('referralIncentive').value = cfg.referralIncentive || '';
+
+  document.getElementById('painPointsList').innerHTML = '';
+  (cfg.painPoints || []).forEach(function(p) { addPainPoint(p); });
+
+  document.getElementById('socialProofList').innerHTML = '';
+  (cfg.socialProof || []).forEach(function(p) { addSocialProof(p); });
+
   document.getElementById('servicesList').innerHTML = '';
   (cfg.services || []).forEach(function(s) { addService(s); });
 
@@ -254,7 +320,49 @@ function populateForm(cfg) {
 // ── Escape helper ─────────────────────────────────────
 function esc(v) { return (v || '').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
 
-// ── Services ──────────────────────────────────────────
+// ── Pain Points ──────────────────────────────────────
+function addPainPoint(text) {
+  var el = document.createElement('div');
+  el.className = 'list-item';
+  var removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-btn';
+  removeBtn.textContent = '\\u00d7';
+  removeBtn.addEventListener('click', function() { el.remove(); });
+  var row = document.createElement('div');
+  row.className = 'row';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'pain-text';
+  input.placeholder = 'Ex: Tem um site mas nao gera nenhum cliente';
+  input.value = text || '';
+  row.appendChild(input);
+  el.appendChild(removeBtn);
+  el.appendChild(row);
+  document.getElementById('painPointsList').appendChild(el);
+}
+
+// ── Social Proof ─────────────────────────────────────
+function addSocialProof(text) {
+  var el = document.createElement('div');
+  el.className = 'list-item';
+  var removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-btn';
+  removeBtn.textContent = '\\u00d7';
+  removeBtn.addEventListener('click', function() { el.remove(); });
+  var row = document.createElement('div');
+  row.className = 'row';
+  var input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'proof-text';
+  input.placeholder = 'Ex: Ja ajudamos 50+ empresas a dobrar seus contatos pelo site';
+  input.value = text || '';
+  row.appendChild(input);
+  el.appendChild(removeBtn);
+  el.appendChild(row);
+  document.getElementById('socialProofList').appendChild(el);
+}
+
+// ── Services (Grand Slam Offers) ─────────────────────
 function addService(data) {
   var el = document.createElement('div');
   el.className = 'list-item';
@@ -288,9 +396,53 @@ function addService(data) {
   descInput.value = data ? (data.description || '') : '';
   row2.appendChild(descInput);
 
+  // Hormozi: Dream Outcome per service
+  var row3 = document.createElement('div');
+  row3.className = 'row';
+  var dreamInput = document.createElement('input');
+  dreamInput.type = 'text';
+  dreamInput.className = 'svc-dream';
+  dreamInput.placeholder = 'Dream Outcome (ex: Dobrar seus clientes em 90 dias)';
+  dreamInput.value = data ? (data.dreamOutcome || '') : '';
+  row3.appendChild(dreamInput);
+
+  // Hormozi: Value Stack
+  var row4 = document.createElement('div');
+  row4.className = 'row';
+  var stackInput = document.createElement('textarea');
+  stackInput.className = 'svc-stack';
+  stackInput.rows = 2;
+  stackInput.placeholder = 'Value Stack (um item por linha): Ex:\\nSite responsivo com 10 paginas\\nSEO local\\nChatbot WhatsApp 24/7';
+  stackInput.value = data && data.valueStack ? data.valueStack.join('\\n') : '';
+  row4.appendChild(stackInput);
+
+  // Hormozi: Bonuses
+  var row5 = document.createElement('div');
+  row5.className = 'row';
+  var bonusInput = document.createElement('textarea');
+  bonusInput.className = 'svc-bonuses';
+  bonusInput.rows = 2;
+  bonusInput.placeholder = 'Bonus (um por linha): Ex:\\nAuditoria completa (valor: R$ 500)\\nSetup GA4 + relatorios (valor: R$ 300/mes)';
+  bonusInput.value = data && data.bonuses ? data.bonuses.join('\\n') : '';
+  row5.appendChild(bonusInput);
+
+  // Hormozi: Guarantee
+  var row6 = document.createElement('div');
+  row6.className = 'row';
+  var guaranteeInput = document.createElement('input');
+  guaranteeInput.type = 'text';
+  guaranteeInput.className = 'svc-guarantee';
+  guaranteeInput.placeholder = 'Garantia (ex: Se nao dobrar contatos em 90 dias, trabalhamos gratis ate bater)';
+  guaranteeInput.value = data ? (data.guarantee || '') : '';
+  row6.appendChild(guaranteeInput);
+
   el.appendChild(removeBtn);
   el.appendChild(row1);
   el.appendChild(row2);
+  el.appendChild(row3);
+  el.appendChild(row4);
+  el.appendChild(row5);
+  el.appendChild(row6);
   document.getElementById('servicesList').appendChild(el);
 }
 
@@ -393,11 +545,33 @@ function collectConfig() {
   cfg.escalationRules = document.getElementById('escalationRules').value.trim();
   cfg.systemPrompt = document.getElementById('systemPrompt').value.trim();
 
+  // Hormozi fields
+  cfg.dreamOutcome = document.getElementById('dreamOutcome').value.trim();
+  cfg.uniqueMechanism = document.getElementById('uniqueMechanism').value.trim();
+  cfg.scarcity = document.getElementById('scarcity').value.trim();
+  cfg.urgency = document.getElementById('urgency').value.trim();
+  cfg.leadMagnet = document.getElementById('leadMagnet').value.trim();
+  cfg.referralIncentive = document.getElementById('referralIncentive').value.trim();
+
+  cfg.painPoints = [].slice.call(document.querySelectorAll('#painPointsList .list-item')).map(function(el) {
+    return el.querySelector('.pain-text').value.trim();
+  }).filter(function(p) { return p; });
+
+  cfg.socialProof = [].slice.call(document.querySelectorAll('#socialProofList .list-item')).map(function(el) {
+    return el.querySelector('.proof-text').value.trim();
+  }).filter(function(p) { return p; });
+
   cfg.services = [].slice.call(document.querySelectorAll('#servicesList .list-item')).map(function(el) {
+    var stackText = el.querySelector('.svc-stack').value.trim();
+    var bonusText = el.querySelector('.svc-bonuses').value.trim();
     return {
       name: el.querySelector('.svc-name').value.trim(),
       description: el.querySelector('.svc-desc').value.trim(),
       price: el.querySelector('.svc-price').value.trim(),
+      dreamOutcome: el.querySelector('.svc-dream').value.trim(),
+      valueStack: stackText ? stackText.split('\\n').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+      bonuses: bonusText ? bonusText.split('\\n').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+      guarantee: el.querySelector('.svc-guarantee').value.trim(),
     };
   }).filter(function(s) { return s.name; });
 
@@ -417,7 +591,9 @@ function collectConfig() {
 
   cfg.forbiddenTopics = [].concat(forbiddenTopics);
 
-  Object.keys(cfg).forEach(function(k) { if (cfg[k] === '') delete cfg[k]; });
+  Object.keys(cfg).forEach(function(k) {
+    if (cfg[k] === '' || (Array.isArray(cfg[k]) && cfg[k].length === 0)) delete cfg[k];
+  });
   return cfg;
 }
 
@@ -464,6 +640,8 @@ function handleFile(file) {
 
 // ── Event Listeners (no inline handlers) ──────────────
 document.getElementById('btn-load-existing').addEventListener('click', loadExisting);
+document.getElementById('btn-add-pain').addEventListener('click', function() { addPainPoint(); });
+document.getElementById('btn-add-proof').addEventListener('click', function() { addSocialProof(); });
 document.getElementById('btn-add-service').addEventListener('click', function() { addService(); });
 document.getElementById('btn-add-faq').addEventListener('click', function() { addFaq(); });
 document.getElementById('btn-add-criterion').addEventListener('click', function() { addCriterion(); });
