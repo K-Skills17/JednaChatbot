@@ -23,6 +23,10 @@ export const createTenantSchema = z.object({
         name: z.string(),
         description: z.string().optional(),
         price: z.string().optional(),                 // e.g. "R$ 150" or "a partir de R$ 200"
+        valueStack: z.array(z.string()).optional(),   // Hormozi: included value items
+        bonuses: z.array(z.string()).optional(),       // Hormozi: bonus items
+        guarantee: z.string().optional(),              // Hormozi: risk reversal
+        dreamOutcome: z.string().optional(),           // Hormozi: transformation delivered
       })).optional(),
       faq: z.array(z.object({                         // Frequently asked questions
         question: z.string(),
@@ -34,6 +38,15 @@ export const createTenantSchema = z.object({
       closingMessage: z.string().optional(),           // Custom goodbye message
       escalationRules: z.string().optional(),          // When to escalate to human
       forbiddenTopics: z.array(z.string()).optional(), // Topics the bot must NOT discuss
+      // Hormozi-inspired sales optimization fields
+      painPoints: z.array(z.string()).optional(),      // Common pains of target audience
+      dreamOutcome: z.string().optional(),             // The big transformation promise
+      uniqueMechanism: z.string().optional(),          // Why YOUR solution is different
+      socialProof: z.array(z.string()).optional(),     // Testimonials, numbers, case studies
+      scarcity: z.string().optional(),                 // Real capacity limits
+      urgency: z.string().optional(),                  // Time-based reason to act now
+      leadMagnet: z.string().optional(),               // Free value offer description
+      referralIncentive: z.string().optional(),        // What they get for referring
       // Widget branding (stored inside aiConfig so no DB migration needed)
       widgetConfig: z.object({
         primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#2563eb'),

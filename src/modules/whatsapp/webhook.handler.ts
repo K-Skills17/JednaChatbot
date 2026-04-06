@@ -71,9 +71,15 @@ export function registerWebhookRoutes(app: FastifyInstance): void {
   );
 }
 
+/** Duration (ms) to pause AI after a human operator sends a message */
+const HUMAN_TAKEOVER_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 async function handleIncomingMessage(instanceName: string, data: MessageData): Promise<void> {
-  // Ignore outgoing messages
-  if (data.key.fromMe) return;
+  // Detect human operator messages (sent from the WhatsApp app, not the bot)
+  if (data.key.fromMe) {
+    await handleHumanOperatorMessage(instanceName, data);
+    return;
+  }
 
   const phone = fromWhatsAppJid(data.key.remoteJid);
   const text = extractTextContent(data);
@@ -204,6 +210,61 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
   logger.info(
     { tenant: tenant.businessName, phone, messageType },
     'Inbound message queued for processing',
+  );
+}
+
+/**
+ * When a human operator sends a message from the WhatsApp app (fromMe: true),
+ * pause the AI bot for that conversation for HUMAN_TAKEOVER_DURATION_MS.
+ * This prevents the bot from responding while a human is actively handling the chat.
+ */
+async function handleHumanOperatorMessage(instanceName: string, data: MessageData): Promise<void> {
+  const phone = fromWhatsAppJid(data.key.remoteJid);
+  const text = extractTextContent(data);
+
+  const tenant = await prisma.tenant.findFirst({
+    where: { evolutionInstanceId: instanceName, status: 'active' },
+  });
+  if (!tenant) return;
+
+  const contact = await prisma.contact.findFirst({
+    where: { tenantId: tenant.id, phone },
+  });
+  if (!contact) return;
+
+  const conversation = await prisma.conversation.findFirst({
+    where: { tenantId: tenant.id, contactId: contact.id, status: 'active' },
+  });
+  if (!conversation) return;
+
+  // Set the human takeover timestamp in conversation context
+  const context = (conversation.context as Record<string, any>) ?? {};
+  const humanTakeoverUntil = new Date(Date.now() + HUMAN_TAKEOVER_DURATION_MS).toISOString();
+
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      context: { ...context, humanTakeoverUntil },
+      lastMessageAt: new Date(),
+    },
+  });
+
+  // Store the human message for conversation history
+  await prisma.message.create({
+    data: {
+      conversationId: conversation.id,
+      tenantId: tenant.id,
+      direction: 'outbound',
+      messageType: text ? 'text' : 'unknown',
+      content: text,
+      whatsappMessageId: data.key.id,
+      status: 'sent',
+    },
+  });
+
+  logger.info(
+    { tenant: tenant.businessName, phone, humanTakeoverUntil },
+    'Human operator took over — AI paused for 2 hours',
   );
 }
 
