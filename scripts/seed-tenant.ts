@@ -1,8 +1,13 @@
 /**
- * Seed script — creates the default LK Digital tenant with WhatsApp number 11959041799.
- * Run with: npx tsx scripts/seed-tenant.ts
+ * Seed script — creates/updates the LK Digital tenant.
  *
- * Idempotent: if a tenant with this phone already exists, it skips creation.
+ * Usage:
+ *   npx tsx scripts/seed-tenant.ts                     # uses WHATSAPP_NUMBER from .env or default
+ *   npx tsx scripts/seed-tenant.ts 5511999999999        # pass new number as argument
+ *   WHATSAPP_NUMBER=5511999999999 npx tsx scripts/seed-tenant.ts  # via env var
+ *
+ * If a tenant with businessName "LK Digital" already exists, it updates the
+ * aiConfig AND the whatsappNumber (if a new one is provided).
  *
  * Training data optimized using Hormozi $100M Offers + $100M Leads frameworks:
  * - Value Equation framing (Dream Outcome × Likelihood ÷ Time × Effort)
@@ -12,38 +17,76 @@
  * - Guarantee-based risk reversal
  * - Referral loop integration
  */
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const prisma = new PrismaClient({ datasourceUrl: process.env.DATABASE_URL });
+const dbUrl = process.env.DATABASE_URL ?? '';
+const sep = dbUrl.includes('?') ? '&' : '?';
+const url = `${dbUrl}${sep}schema=lk_chatbot`;
+const pool = new Pool({ connectionString: url });
+const adapter = new PrismaPg(pool, { schema: 'lk_chatbot' });
+const prisma = new PrismaClient({ adapter });
 
-const WHATSAPP_NUMBER = '5511959041799';
+// Priority: CLI arg > env var > old default
+const WHATSAPP_NUMBER = process.argv[2] || process.env.WHATSAPP_NUMBER || '5511959041799';
 const INSTANCE_NAME = `lk-principal-${Date.now()}`;
 
 async function main() {
-  console.log('Checking for existing tenant...');
+  console.log(`Using WhatsApp number: ${WHATSAPP_NUMBER}`);
+  console.log('Checking for existing LK Digital tenant...');
 
+  // Find by business name OR phone number (covers number changes)
   const existing = await prisma.tenant.findFirst({
-    where: { whatsappNumber: WHATSAPP_NUMBER },
+    where: {
+      OR: [
+        { businessName: 'LK Digital' },
+        { whatsappNumber: WHATSAPP_NUMBER },
+      ],
+    },
   });
 
   if (existing) {
-    console.log(`Tenant already exists: ${existing.businessName} (${existing.id})`);
-    console.log(`Instance: ${existing.evolutionInstanceId}`);
-    console.log(`Status: ${existing.status}`);
+    const numberChanged = existing.whatsappNumber !== WHATSAPP_NUMBER;
+    console.log(`Tenant found: ${existing.businessName} (${existing.id})`);
+    console.log(`Current number: ${existing.whatsappNumber}`);
+    if (numberChanged) {
+      console.log(`New number: ${WHATSAPP_NUMBER}`);
+    }
     console.log('');
     console.log('Updating aiConfig with Hormozi-optimized training data...');
 
+    const updateData: Record<string, any> = {
+      aiConfig: buildAiConfig(),
+    };
+
+    // Update the number + create a new Evolution instance if changed
+    if (numberChanged) {
+      updateData.whatsappNumber = WHATSAPP_NUMBER;
+      updateData.evolutionInstanceId = INSTANCE_NAME;
+      console.log(`Updating WhatsApp number: ${existing.whatsappNumber} → ${WHATSAPP_NUMBER}`);
+      console.log(`New Evolution instance: ${INSTANCE_NAME}`);
+    }
+
     const updated = await prisma.tenant.update({
       where: { id: existing.id },
-      data: {
-        aiConfig: buildAiConfig(),
-      },
+      data: updateData,
     });
 
-    console.log('aiConfig updated successfully!');
+    console.log('');
+    console.log('=== Tenant Updated Successfully ===');
+    console.log(`  Number:   ${updated.whatsappNumber}`);
+    console.log(`  Instance: ${updated.evolutionInstanceId}`);
+    if (numberChanged) {
+      console.log('');
+      console.log('NEXT STEPS:');
+      console.log('  1. Connect the new number in Evolution API (scan QR code)');
+      console.log('  2. Set up the webhook for the new instance');
+      console.log('  3. Test with a message to the new number');
+    }
     return updated;
   }
 
