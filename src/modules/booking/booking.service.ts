@@ -2,7 +2,7 @@ import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { formatDatePtBr } from '../../utils/timezone.utils';
 import { getCalendarClient, CalendarSlot } from './calendar.client';
-import { getReminderQueue } from '../../jobs/queue.setup';
+import { getReminderQueue, getReviewQueue } from '../../jobs/queue.setup';
 import { notificationService } from '../notification/notification.service';
 
 interface CreateBookingInput {
@@ -23,6 +23,7 @@ interface BookingWithDetails {
   status: string;
   appointmentType: string | null;
   calendarEventId: string | null;
+  meetLink: string | null;
   notes: string | null;
 }
 
@@ -65,10 +66,14 @@ export class BookingService {
 
         await prisma.booking.update({
           where: { id: booking.id },
-          data: { calendarEventId: event.eventId },
+          data: {
+            calendarEventId: event.eventId,
+            meetLink: event.meetLink ?? null,
+          },
         });
 
         booking.calendarEventId = event.eventId;
+        (booking as any).meetLink = event.meetLink ?? null;
       } catch (err) {
         logger.error({ err, bookingId: booking.id }, 'Failed to create calendar event');
       }
@@ -146,6 +151,36 @@ export class BookingService {
     });
 
     logger.info({ bookingId: id }, 'Booking cancelled');
+  }
+
+  /** Mark a booking as completed (call happened — prevents no-show follow-up) */
+  async complete(id: string): Promise<BookingWithDetails> {
+    const booking = await prisma.booking.findUnique({ where: { id } });
+    if (!booking) throw new Error('Booking not found');
+
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: { status: 'completed' },
+    });
+
+    // Schedule review request (2 hours after completion by default)
+    const tenant = await prisma.tenant.findUnique({ where: { id: booking.tenantId } });
+    const reviewConfig = (tenant?.reviewConfig as { delayHours?: number } | null) ?? {};
+    const delayMs = (reviewConfig.delayHours ?? 2) * 60 * 60 * 1000;
+
+    try {
+      await getReviewQueue().add(
+        'review-request',
+        { bookingId: id, tenantId: booking.tenantId, contactId: booking.contactId },
+        { delay: delayMs, removeOnComplete: 100, removeOnFail: 50 },
+      );
+      logger.info({ bookingId: id, delayMs }, 'Review request scheduled');
+    } catch (err) {
+      logger.warn({ err, bookingId: id }, 'Failed to schedule review request (non-fatal)');
+    }
+
+    logger.info({ bookingId: id }, 'Booking marked as completed');
+    return updated as BookingWithDetails;
   }
 
   /** Reschedule a booking */
@@ -236,6 +271,14 @@ export class BookingService {
         { delay: reminder1h - now },
       );
     }
+
+    // No-show follow-up: 30 min after the scheduled time
+    const noShowCheck = scheduledAt.getTime() + 30 * 60 * 1000;
+    await getReminderQueue().add(
+      'no-show-followup',
+      { bookingId, tenantId, contactId },
+      { delay: noShowCheck - now },
+    );
   }
 }
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const createTenantSchema = z.object({
   businessName: z.string().min(1).max(255),
-  whatsappNumber: z.string().min(10).max(20),
+  whatsappNumber: z.string().min(10).max(20).optional(),
   timezone: z.string().default('America/Sao_Paulo'),
   businessHours: z
     .object({
@@ -47,6 +47,15 @@ export const createTenantSchema = z.object({
       urgency: z.string().optional(),                  // Time-based reason to act now
       leadMagnet: z.string().optional(),               // Free value offer description
       referralIncentive: z.string().optional(),        // What they get for referring
+      // Widget branding (stored inside aiConfig so no DB migration needed)
+      widgetConfig: z.object({
+        primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#2563eb'),
+        headerTitle: z.string().max(60).optional(),           // defaults to businessName
+        welcomeMessage: z.string().max(500).optional(),       // auto-greeting when chat opens
+        position: z.enum(['bottom-right', 'bottom-left']).default('bottom-right'),
+        avatarUrl: z.string().url().optional(),               // custom bot avatar
+        bubbleIcon: z.enum(['chat', 'message', 'help']).default('chat'),
+      }).optional(),
     })
     .default({ model: 'claude', temperature: 0.7, qualificationCriteria: [], tone: 'friendly' as const }),
   notificationConfig: z

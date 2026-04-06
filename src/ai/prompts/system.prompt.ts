@@ -61,6 +61,7 @@ export function buildSystemPrompt(
 
   const isAuditLead = context.extractedData?.source === 'audit_tool' ||
     (context as any).auditReportSent === true;
+  const isFacebookLead = context.extractedData?.source === 'facebook_lead_ad';
 
   parts.push(buildIdentity(tenant.businessName, tenant.aiConfig.tone));
   parts.push(buildSalesFramework(tenant.aiConfig));
@@ -84,6 +85,8 @@ export function buildSystemPrompt(
   // Keep audit instructions active until the conversation moves to booking/closed
   if (isAuditLead && context.state !== 'booking' && context.state !== 'closed') {
     parts.push(buildAuditLeadInstructions(context, tenant.aiConfig));
+  } else if (isFacebookLead && context.state !== 'booking' && context.state !== 'closed') {
+    parts.push(buildFacebookLeadInstructions(context));
   } else {
     parts.push(buildStateInstructions(
       context.state,
@@ -274,6 +277,22 @@ function buildContactContext(contact: ContactData, context: ConversationContext)
   const isAuditLead = context.extractedData?.source === 'audit_tool' ||
     (context as any).auditReportSent === true;
 
+  const isFacebookLead = context.extractedData?.source === 'facebook_lead_ad';
+
+  if (isFacebookLead) {
+    lines.push('- **Origem: Formulário no Facebook** (preencheu formulário de anúncio no Facebook)');
+
+    const scoring = context.extractedData?.formScoring;
+    if (scoring) {
+      lines.push(`- Faltas por mês: ~${scoring.noShowsPerMonth} consultas`);
+      lines.push(`- Ticket médio: R$${scoring.averageTicket}`);
+      lines.push(`- Perda mensal calculada: R$${scoring.monthlyLoss}`);
+      lines.push(`- Perda anual calculada: R$${scoring.annualLoss}`);
+      lines.push(`- Nível de prioridade: ${scoring.priority}`);
+      lines.push(`- Tier: ${scoring.tier}`);
+    }
+  }
+
   if (isAuditLead) {
     lines.push('- **Origem: Ferramenta de Auditoria** (já recebeu o relatório de auditoria via WhatsApp)');
 
@@ -339,6 +358,11 @@ function buildStateInstructions(
     case 'booking':
       return buildBookingInstructions(aiConfig);
 
+    case 'awaiting_review':
+      return `## Fase Atual: Aguardando Avaliação
+Uma solicitação de avaliação foi enviada ao contato. Aguarde a resposta com uma nota de 1 a 5.
+Se o contato enviar outro assunto, responda normalmente e mantenha o estado.`;
+
     case 'closed':
       return buildClosedInstructions(aiConfig);
   }
@@ -384,6 +408,114 @@ EXEMPLO DE BOA RESPOSTA:
 
 EXEMPLO DE RESPOSTA RUIM (NÃO FAÇA ISSO):
 "Ótimo! Você já tem um site pronto ou está começando agora?"`;
+}
+
+/**
+ * Special instructions for leads from Facebook lead ad forms.
+ */
+function buildFacebookLeadInstructions(context: ConversationContext): string {
+  const scoring = context.extractedData?.formScoring;
+
+  let scoringContext = '';
+  if (scoring) {
+    scoringContext = `
+- O lead já recebeu o cálculo de perda:
+  - ~${scoring.noShowsPerMonth} faltas/mês
+  - Ticket médio R$${scoring.averageTicket}
+  - Perda mensal R$${scoring.monthlyLoss}
+  - Perda anual R$${scoring.annualLoss}
+- Tier do lead: ${scoring.tier} (prioridade: ${scoring.priority})`;
+  }
+
+  const ed = context.extractedData ?? {};
+  const answered: string[] = [];
+  const missing: string[] = [];
+
+  const qualFields: Array<{ key: string; label: string }> = [
+    { key: 'is_owner', label: 'É dono(a)/sócio(a) da clínica' },
+    { key: 'num_chairs_or_patients', label: 'Quantas cadeiras / pacientes ativos por mês' },
+    { key: 'runs_paid_ads', label: 'Se já investe em tráfego pago (anúncios)' },
+    { key: 'marketing_budget', label: 'Orçamento mensal de marketing' },
+  ];
+
+  for (const f of qualFields) {
+    if (ed[f.key] != null && ed[f.key] !== '') {
+      answered.push(`✅ ${f.label}: ${ed[f.key]}`);
+    } else {
+      missing.push(`❌ ${f.label}`);
+    }
+  }
+
+  const allAnswered = missing.length === 0;
+  const gateSection = allAnswered ? buildBookingGateEvaluation(ed) : '';
+
+  return `## Fase Atual: Follow-up do Formulário Facebook
+
+REGRAS CRÍTICAS — LEIA COM ATENÇÃO:
+- Este contato preencheu um formulário no Facebook/Instagram sobre redução de faltas em clínicas.
+- A primeira mensagem JÁ mencionou que ele preencheu o formulário no Facebook e JÁ enviou os números de perda.${scoringContext}
+- SEMPRE que o contato perguntar de onde estamos entrando em contato, reforce que ele preencheu nosso formulário no Facebook.
+- NÃO repita os números de perda a menos que o contato pergunte especificamente.
+- O contato JÁ foi convidado para uma conversa de diagnóstico de 30 minutos.
+
+## Qualificação Obrigatória (antes de oferecer agendamento)
+
+ANTES de oferecer agendar a conversa de diagnóstico, você PRECISA descobrir 4 informações.
+Faça UMA pergunta por vez, de forma natural e conversacional (NÃO como questionário).
+Adapte a ordem conforme o fluxo da conversa — não precisa seguir a ordem abaixo.
+
+### Perguntas que precisam ser respondidas:
+1. **É o dono(a) ou sócio(a) da clínica?** → salve em extractedData como "is_owner" (true/false)
+2. **Quantas cadeiras tem / quantos pacientes atende por mês?** → salve como "num_chairs_or_patients" (texto livre)
+3. **Já investe em tráfego pago (anúncios pagos)?** → salve como "runs_paid_ads" (true/false)
+4. **Qual o orçamento mensal de marketing?** → salve como "marketing_budget" (texto livre, ex: "R$2.000", "não tenho", "R$5.000-10.000")
+
+### Progresso da qualificação:
+${answered.length > 0 ? answered.join('\n') : '(nenhuma pergunta respondida ainda)'}
+${missing.length > 0 ? missing.join('\n') : '✅ TODAS respondidas — avalie a elegibilidade abaixo'}
+
+### Como perguntar:
+- Espere o contato responder à primeira mensagem antes de começar a qualificação
+- Faça perguntas naturais: "Só pra entender melhor, você é o dono da clínica?" em vez de "Pergunta 1: é dono?"
+- Se o contato responder várias de uma vez, ótimo — salve tudo que conseguir
+- Se o contato fizer perguntas sobre a solução, responda brevemente e depois faça a próxima pergunta de qualificação
+${gateSection}
+${!allAnswered ? `### IMPORTANTE:
+NÃO ofereça agendamento enquanto as 4 perguntas não forem respondidas.
+Se o contato pedir para agendar antes de responder, diga algo como: "Com certeza! Só preciso entender melhor a situação da sua clínica para preparar o melhor diagnóstico pra você."` : ''}
+
+IMPORTANTE: Se o contato perguntar "quem é você?" ou "de onde me conhecem?", SEMPRE diga que ele preencheu um formulário no Facebook sobre redução de faltas em clínicas.`;
+}
+
+function buildBookingGateEvaluation(ed: Record<string, any>): string {
+  return `
+## Avaliação de Elegibilidade para Agendamento
+
+TODAS as 4 perguntas foram respondidas. Agora avalie:
+
+### Critérios para AGENDAR (lead qualificado):
+- É dono(a)/sócio(a) da clínica (is_owner = true)
+- Tem estrutura real (cadeiras ≥ 2 OU pacientes/mês ≥ 50)
+- Idealmente já investe em marketing OU tem orçamento mensal ≥ R$1.000
+
+### Critérios para NÃO agendar (lead não qualificado):
+- NÃO é dono/sócio e não tem poder de decisão
+- Clínica muito pequena (1 cadeira, poucos pacientes) sem orçamento de marketing
+- Não tem nenhum orçamento de marketing e não pretende investir
+
+### O que fazer:
+**Se qualificado:**
+- Mude leadStatus para "qualified" e leadScore para 70+
+- Ofereça agendar a conversa de diagnóstico de 30 minutos
+- Mude nextState para "booking" quando o contato aceitar
+- Diga algo como: "Perfeito! Com essas informações, consigo preparar um diagnóstico personalizado pra ${ed.is_owner ? 'sua clínica' : 'a clínica'}. Vamos marcar aquela conversa de 30 minutos? Qual dia e horário ficam melhores pra você?"
+
+**Se NÃO qualificado:**
+- Mude leadStatus para "lost" e leadScore para 20
+- Seja educado e empático — NÃO diga que foi desqualificado
+- Diga algo como: "Obrigado por compartilhar! No momento nosso método funciona melhor para clínicas com [razão contextual]. Mas se a situação mudar, é só entrar em contato! 😊"
+- Mude nextState para "closed"
+- Em qualificationReasoning explique por que não qualificou`;
 }
 
 function buildGreetingInstructions(aiConfig: TenantData['aiConfig']): string {

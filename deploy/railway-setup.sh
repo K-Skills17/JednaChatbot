@@ -82,6 +82,14 @@ railway variables set EVOLUTION_API_KEY="$EVOLUTION_API_KEY"
 read -rp "Enter EVOLUTION_API_URL (Railway internal URL of Evolution service): " EVOLUTION_API_URL
 railway variables set EVOLUTION_API_URL="$EVOLUTION_API_URL"
 
+# Generate a strong JWT secret
+JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
+railway variables set JWT_SECRET="$JWT_SECRET"
+ok "JWT_SECRET generated and set."
+
+read -rp "Enter ADMIN_PASSWORD (for bootstrapping first admin account): " ADMIN_PASSWORD
+railway variables set ADMIN_PASSWORD="$ADMIN_PASSWORD"
+
 # Set default AI models
 railway variables set AI_PRIMARY_PROVIDER=claude
 railway variables set AI_PRIMARY_MODEL=claude-haiku-4-5-20251001
@@ -89,7 +97,73 @@ railway variables set AI_QUALIFICATION_MODEL=claude-sonnet-4-5-20250929
 railway variables set NODE_ENV=production
 railway variables set PORT=3000
 
-ok "Environment variables set."
+ok "Core environment variables set."
+echo ""
+
+# ---- Step 5b: Optional integrations ----
+info "Step 5b: Optional integrations (press Enter to skip any)..."
+echo ""
+
+# Stripe
+echo "── Stripe Billing ──"
+echo "  Get keys from: https://dashboard.stripe.com/apikeys"
+read -rp "STRIPE_SECRET_KEY (sk_live_... or sk_test_...): " STRIPE_SECRET_KEY
+if [ -n "$STRIPE_SECRET_KEY" ]; then
+  railway variables set STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY"
+  read -rp "STRIPE_WEBHOOK_SECRET (whsec_...): " STRIPE_WEBHOOK_SECRET
+  [ -n "$STRIPE_WEBHOOK_SECRET" ] && railway variables set STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET"
+  echo "  Create 3 products in Stripe Dashboard, then paste their price IDs:"
+  read -rp "  STRIPE_STARTER_PRICE_ID (price_...): " STRIPE_STARTER_PRICE_ID
+  [ -n "$STRIPE_STARTER_PRICE_ID" ] && railway variables set STRIPE_STARTER_PRICE_ID="$STRIPE_STARTER_PRICE_ID"
+  read -rp "  STRIPE_PRO_PRICE_ID (price_...): " STRIPE_PRO_PRICE_ID
+  [ -n "$STRIPE_PRO_PRICE_ID" ] && railway variables set STRIPE_PRO_PRICE_ID="$STRIPE_PRO_PRICE_ID"
+  read -rp "  STRIPE_ENTERPRISE_PRICE_ID (price_...): " STRIPE_ENTERPRISE_PRICE_ID
+  [ -n "$STRIPE_ENTERPRISE_PRICE_ID" ] && railway variables set STRIPE_ENTERPRISE_PRICE_ID="$STRIPE_ENTERPRISE_PRICE_ID"
+  ok "Stripe configured."
+fi
+echo ""
+
+# Facebook Lead Ads
+echo "── Facebook Lead Ads ──"
+echo "  Get these from: Facebook Developer Portal > App Settings"
+read -rp "FACEBOOK_APP_SECRET: " FACEBOOK_APP_SECRET
+if [ -n "$FACEBOOK_APP_SECRET" ]; then
+  railway variables set FACEBOOK_APP_SECRET="$FACEBOOK_APP_SECRET"
+  read -rp "FACEBOOK_PAGE_ACCESS_TOKEN: " FACEBOOK_PAGE_ACCESS_TOKEN
+  [ -n "$FACEBOOK_PAGE_ACCESS_TOKEN" ] && railway variables set FACEBOOK_PAGE_ACCESS_TOKEN="$FACEBOOK_PAGE_ACCESS_TOKEN"
+  railway variables set FACEBOOK_VERIFY_TOKEN="lk-chatbot-fb-verify-2024"
+  ok "Facebook Lead Ads configured."
+fi
+echo ""
+
+# Google Calendar
+echo "── Google Calendar OAuth ──"
+echo "  Get these from: Google Cloud Console > APIs & Services > Credentials"
+read -rp "GOOGLE_CLIENT_ID: " GOOGLE_CLIENT_ID
+if [ -n "$GOOGLE_CLIENT_ID" ]; then
+  railway variables set GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID"
+  read -rp "GOOGLE_CLIENT_SECRET: " GOOGLE_CLIENT_SECRET
+  [ -n "$GOOGLE_CLIENT_SECRET" ] && railway variables set GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET"
+  echo "  NOTE: Set GOOGLE_REDIRECT_URI after you get your public URL in Step 7."
+  ok "Google Calendar configured."
+fi
+echo ""
+
+# SMTP
+echo "── Email / SMTP ──"
+echo "  For Gmail: use an App Password (https://myaccount.google.com/apppasswords)"
+read -rp "SMTP_USER (email address): " SMTP_USER
+if [ -n "$SMTP_USER" ]; then
+  railway variables set SMTP_HOST="smtp.gmail.com"
+  railway variables set SMTP_PORT="587"
+  railway variables set SMTP_USER="$SMTP_USER"
+  read -rp "SMTP_PASS (app password): " SMTP_PASS
+  [ -n "$SMTP_PASS" ] && railway variables set SMTP_PASS="$SMTP_PASS"
+  ok "SMTP configured."
+fi
+echo ""
+
+ok "All environment variables set."
 echo ""
 
 # ---- Step 6: Deploy ----
@@ -106,6 +180,13 @@ echo ""
 read -rp "Paste your public URL here (https://...): " PUBLIC_URL
 railway variables set WEBHOOK_BASE_URL="$PUBLIC_URL"
 ok "WEBHOOK_BASE_URL set to $PUBLIC_URL"
+
+# Set Google redirect URI now that we have the public URL
+if railway variables get GOOGLE_CLIENT_ID 2>/dev/null | grep -q .; then
+  GOOGLE_REDIRECT="${PUBLIC_URL}/api/calendar/callback"
+  railway variables set GOOGLE_REDIRECT_URI="$GOOGLE_REDIRECT"
+  ok "GOOGLE_REDIRECT_URI set to $GOOGLE_REDIRECT"
+fi
 echo ""
 
 # ---- Step 8: Run database migrations ----
@@ -133,10 +214,11 @@ echo "=============================================="
 echo "  Deployment Complete!"
 echo "=============================================="
 echo ""
-echo "  App URL:     $PUBLIC_URL"
-echo "  Health:      $PUBLIC_URL/health"
-echo "  Readiness:   $PUBLIC_URL/health/ready"
-echo "  API docs:    $PUBLIC_URL/api/tenants"
+echo "  App URL:      $PUBLIC_URL"
+echo "  Admin Panel:  $PUBLIC_URL"
+echo "  Client Portal: $PUBLIC_URL/portal"
+echo "  Health:       $PUBLIC_URL/health"
+echo "  Readiness:    $PUBLIC_URL/health/ready"
 echo ""
 echo "  Next steps:"
 echo "  1. Deploy Evolution API as a separate Railway service"
@@ -145,5 +227,11 @@ echo "  2. Connect a WhatsApp number via Evolution API"
 echo "  3. Create your first tenant via POST /api/tenants"
 echo "  4. Configure the webhook on Evolution API to point to:"
 echo "     $PUBLIC_URL/webhook/evolution"
+echo "  5. Bootstrap first admin: POST $PUBLIC_URL/api/admin/register"
+echo "     with { email, password, name, setupKey: <ADMIN_PASSWORD> }"
+echo "  6. If using Stripe, create a webhook in Stripe Dashboard pointing to:"
+echo "     $PUBLIC_URL/api/billing/webhook"
+echo "  7. If using Facebook Lead Ads, set webhook URL in Facebook Developer Portal:"
+echo "     $PUBLIC_URL/webhook/facebook"
 echo ""
 ok "All done! Happy chatbotting!"

@@ -9,7 +9,10 @@ import {
   startCampaignScheduler,
   startNotificationWorker,
   startFacebookLeadWorker,
+  startReviewWorker,
+  startReviewExpirationScheduler,
   startDailySummaryScheduler,
+  startDiagnosticWorker,
   stopAllWorkers,
 } from './jobs/queue.setup';
 import { logger } from './utils/logger';
@@ -45,6 +48,9 @@ async function main() {
       await startCampaignScheduler();
       startNotificationWorker();
       startFacebookLeadWorker();
+      startReviewWorker();
+      startDiagnosticWorker();
+      await startReviewExpirationScheduler();
       await startDailySummaryScheduler();
     } catch (err) {
       logger.error({ err }, 'Failed to connect services — server running without workers');
@@ -57,6 +63,7 @@ async function main() {
   logger.info(`Environment: ${env.NODE_ENV}`);
   logger.info(`Webhook URL: ${env.WEBHOOK_BASE_URL}/webhook/evolution`);
   logger.info(`Facebook Webhook URL: ${env.WEBHOOK_BASE_URL}/webhook/facebook`);
+  logger.info(`Diagnostic Webhook URL: ${env.WEBHOOK_BASE_URL}/webhook/diagnostic`);
 
   // ─── Config diagnostics (visible in Railway logs) ──────────
   logger.info({

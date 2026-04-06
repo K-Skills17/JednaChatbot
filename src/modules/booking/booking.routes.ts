@@ -114,6 +114,18 @@ export function registerBookingRoutes(app: FastifyInstance): void {
     },
   );
 
+  // Mark a booking as completed (prevents no-show follow-up)
+  app.post(
+    '/api/tenants/:tenantId/bookings/:bookingId/complete',
+    async (
+      request: FastifyRequest<{ Params: { tenantId: string; bookingId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      const booking = await bookingService.complete(request.params.bookingId);
+      return reply.send(booking);
+    },
+  );
+
   // ─── Google Calendar OAuth ──────────────────────────────────
 
   // Start OAuth flow for a tenant

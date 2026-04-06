@@ -95,6 +95,7 @@ export function registerTrainingRoutes(app: FastifyInstance): void {
       if (body.urgency !== undefined) aiConfig.urgency = body.urgency;
       if (body.leadMagnet !== undefined) aiConfig.leadMagnet = body.leadMagnet;
       if (body.referralIncentive !== undefined) aiConfig.referralIncentive = body.referralIncentive;
+      if (body.widgetConfig !== undefined) aiConfig.widgetConfig = body.widgetConfig;
 
       const tenant = await tenantService.update(tenantId, { aiConfig: aiConfig as any });
       return reply.send({ success: true, tenant });

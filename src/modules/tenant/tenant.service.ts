@@ -7,21 +7,26 @@ import { normalizeBrazilianPhone } from '../../utils/phone.utils';
 import { CreateTenantInput, UpdateTenantInput } from './tenant.schema';
 
 export class TenantService {
-  /** Create a new tenant and provision an Evolution API instance */
+  /** Create a new tenant and optionally provision an Evolution API instance */
   async create(input: CreateTenantInput) {
-    const normalizedPhone = normalizeBrazilianPhone(input.whatsappNumber);
-    if (!normalizedPhone) {
-      throw new Error(`Invalid Brazilian phone number: ${input.whatsappNumber}`);
-    }
+    let normalizedPhone: string | null = null;
+    let instanceName: string | null = null;
 
-    // Prevent duplicate tenants with the same phone number
-    const existing = await prisma.tenant.findUnique({ where: { whatsappNumber: normalizedPhone } });
-    if (existing) {
-      throw new Error(`A tenant with phone number ${normalizedPhone} already exists (${existing.businessName})`);
-    }
+    // If WhatsApp number provided, validate and set up Evolution
+    if (input.whatsappNumber) {
+      normalizedPhone = normalizeBrazilianPhone(input.whatsappNumber);
+      if (!normalizedPhone) {
+        throw new Error(`Invalid Brazilian phone number: ${input.whatsappNumber}`);
+      }
 
-    // Generate a unique instance name
-    const instanceName = `lk-${input.businessName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+      // Prevent duplicate tenants with the same phone number
+      const existing = await prisma.tenant.findUnique({ where: { whatsappNumber: normalizedPhone } });
+      if (existing) {
+        throw new Error(`A tenant with phone number ${normalizedPhone} already exists (${existing.businessName})`);
+      }
+
+      instanceName = `lk-${input.businessName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+    }
 
     // Create tenant in database with a unique API key
     const apiKey = `lk_${crypto.randomBytes(24).toString('hex')}`;
@@ -36,17 +41,22 @@ export class TenantService {
         notificationConfig: input.notificationConfig ?? undefined,
         plan: input.plan,
         apiKey,
-        status: 'onboarding',
+        // Web-only tenants go straight to active (no WhatsApp onboarding needed)
+        status: normalizedPhone ? 'onboarding' : 'active',
       },
     });
 
-    // Provision Evolution API instance
-    try {
-      await evolutionClient.createInstance(instanceName);
-      logger.info({ tenantId: tenant.id, instanceName }, 'Tenant created with Evolution instance');
-    } catch (err) {
-      logger.error({ err, tenantId: tenant.id }, 'Failed to create Evolution instance');
-      // Tenant is created but instance failed — can retry via /connect endpoint
+    // Provision Evolution API instance only if WhatsApp is configured
+    if (instanceName) {
+      try {
+        await evolutionClient.createInstance(instanceName);
+        logger.info({ tenantId: tenant.id, instanceName }, 'Tenant created with Evolution instance');
+      } catch (err) {
+        logger.error({ err, tenantId: tenant.id }, 'Failed to create Evolution instance');
+        // Tenant is created but instance failed — can retry via /connect endpoint
+      }
+    } else {
+      logger.info({ tenantId: tenant.id }, 'Web-only tenant created (no WhatsApp)');
     }
 
     return tenant;
@@ -67,12 +77,27 @@ export class TenantService {
     return { tenants, total, page, limit };
   }
 
-  /** Update a tenant */
+  /** Update a tenant (deep-merges JSON fields so partial updates don't overwrite) */
   async update(id: string, input: UpdateTenantInput) {
     if (input.whatsappNumber) {
       const normalized = normalizeBrazilianPhone(input.whatsappNumber);
       if (!normalized) throw new Error(`Invalid Brazilian phone number: ${input.whatsappNumber}`);
       input.whatsappNumber = normalized;
+    }
+
+    // Deep-merge JSON config fields with existing values
+    if (input.aiConfig != null || input.notificationConfig != null) {
+      const existing = await prisma.tenant.findUnique({ where: { id } });
+      if (!existing) throw new Error('Tenant not found');
+
+      if (input.aiConfig != null) {
+        const current = (existing.aiConfig as Record<string, any>) ?? {};
+        input.aiConfig = { ...current, ...input.aiConfig } as any;
+      }
+      if (input.notificationConfig != null) {
+        const current = (existing.notificationConfig as Record<string, any>) ?? {};
+        input.notificationConfig = { ...current, ...input.notificationConfig } as any;
+      }
     }
 
     return prisma.tenant.update({ where: { id }, data: input });
@@ -148,6 +173,16 @@ export class TenantService {
     return { webhookUrl: evolutionConfig.webhookUrl, instanceName: tenant.evolutionInstanceId };
   }
 
+  /** Generate (or regenerate) an API key for a tenant */
+  async generateApiKey(id: string) {
+    const apiKey = `lk_${crypto.randomBytes(24).toString('hex')}`;
+    const tenant = await prisma.tenant.update({
+      where: { id },
+      data: { apiKey },
+    });
+    return { apiKey: tenant.apiKey };
+  }
+
   /** Delete a tenant and all its related data */
   async delete(id: string) {
     const tenant = await prisma.tenant.findUnique({ where: { id } });
@@ -168,6 +203,10 @@ export class TenantService {
     // background at container start and may not have applied the new FK
     // constraints before the first delete request arrives.
     await prisma.$transaction(async (tx) => {
+      await tx.tenantUser.deleteMany({ where: { tenantId: id } });
+      await tx.review.deleteMany({ where: { tenantId: id } });
+      await tx.invoice.deleteMany({ where: { tenantId: id } });
+      await tx.subscription.deleteMany({ where: { tenantId: id } });
       await tx.notification.deleteMany({ where: { tenantId: id } });
       await tx.message.deleteMany({ where: { tenantId: id } });
       await tx.conversation.deleteMany({ where: { tenantId: id } });

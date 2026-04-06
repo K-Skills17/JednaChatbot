@@ -6,6 +6,7 @@ import { sendMessage } from '../whatsapp/message.sender';
 import { getProvider, getModelForTier } from '../../ai/ai.router';
 import { buildSystemPrompt } from '../../ai/prompts/system.prompt';
 import { normalizeBrazilianPhone, cleanPhone } from '../../utils/phone.utils';
+import { calculateFormLeadScore, buildScoredFirstMessage, FormLeadScore } from './form-lead-scoring';
 
 /**
  * Facebook Lead Job Data — enqueued by the webhook handler
@@ -40,6 +41,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
   // 2. Extract fields from the lead form
   const fields = parseLeadFields(leadData.field_data);
+  logger.info({ leadgenId, fields }, 'Facebook lead raw fields from Graph API');
   const phone = fields.phone_number ?? fields.phone ?? null;
   const name = fields.full_name ?? fields.first_name ?? null;
   const email = fields.email ?? null;
@@ -64,7 +66,53 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
     return;
   }
 
-  // 4. Upsert contact
+  // 4. Calculate lead score from form dropdown answers
+  // Facebook field names vary — find them by keyword matching
+  // Log ALL field names and values so we can debug mismatches
+  logger.info(
+    { leadgenId, fieldNames: Object.keys(fields), fieldEntries: Object.entries(fields).map(([k, v]) => `${k}=${v}`) },
+    'Facebook lead ALL fields before scoring',
+  );
+  const noShowValue = findFieldByKeywords(fields, ['faltas', 'cancelamentos', 'no_show']);
+  const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket_médio', 'ticket']);
+  logger.info({ leadgenId, noShowValue, ticketValue, noShowFound: !!noShowValue, ticketFound: !!ticketValue }, 'Facebook lead scoring fields resolved');
+  const formScoring = calculateFormLeadScore(noShowValue, ticketValue);
+  logger.info(
+    { leadgenId, scoringResult: formScoring ? 'SCORED' : 'NULL_FALLBACK_TO_AI', tier: formScoring?.tier },
+    formScoring ? 'Lead scored — will use template message' : 'Scoring returned null — will use AI-generated message',
+  );
+
+  const qualificationData: Record<string, any> = {
+    source: 'facebook_lead_ad',
+    formId,
+    adId: job.data.adId ?? null,
+    rawFields: fields,
+  };
+
+  // Attach scoring data if available
+  if (formScoring) {
+    qualificationData.formScoring = {
+      noShowsPerMonth: formScoring.noShowsPerMonth,
+      averageTicket: formScoring.averageTicket,
+      monthlyLoss: formScoring.monthlyLoss,
+      annualLoss: formScoring.annualLoss,
+      signalLevel: formScoring.signalLevel,
+      icpSignal: formScoring.icpSignal,
+      priority: formScoring.priority,
+      tier: formScoring.tier,
+    };
+    logger.info(
+      { leadgenId, tier: formScoring.tier, monthlyLoss: formScoring.monthlyLoss, leadScore: formScoring.leadScore },
+      'Facebook form lead scored',
+    );
+  }
+
+  // 5. Upsert contact
+  const initialLeadScore = formScoring?.leadScore ?? 0;
+  const initialLeadStatus = formScoring
+    ? (formScoring.tier === 'nurture' ? 'new' : 'qualifying')
+    : 'new';
+
   const contact = await prisma.contact.upsert({
     where: { tenantId_phone: { tenantId: tenant.id, phone: normalizedPhone } },
     update: {
@@ -72,30 +120,22 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
       name: name ?? undefined,
       email: email ?? undefined,
       tags: { push: 'facebook-lead' },
-      qualificationData: {
-        source: 'facebook_lead_ad',
-        formId,
-        adId: job.data.adId ?? null,
-        rawFields: fields,
-      },
+      leadScore: initialLeadScore,
+      qualificationData,
     },
     create: {
       tenantId: tenant.id,
       phone: normalizedPhone,
       name,
       email,
-      leadStatus: 'new',
+      leadStatus: initialLeadStatus,
+      leadScore: initialLeadScore,
       tags: ['facebook-lead'],
-      qualificationData: {
-        source: 'facebook_lead_ad',
-        formId,
-        adId: job.data.adId ?? null,
-        rawFields: fields,
-      },
+      qualificationData,
     },
   });
 
-  // 5. Create a new conversation
+  // 6. Create a new conversation
   const conversation = await prisma.conversation.create({
     data: {
       tenantId: tenant.id,
@@ -107,6 +147,16 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
           nome: name,
           email,
           source: 'facebook_lead_ad',
+          ...(formScoring ? {
+            formScoring: {
+              noShowsPerMonth: formScoring.noShowsPerMonth,
+              averageTicket: formScoring.averageTicket,
+              monthlyLoss: formScoring.monthlyLoss,
+              annualLoss: formScoring.annualLoss,
+              tier: formScoring.tier,
+              priority: formScoring.priority,
+            },
+          } : {}),
           ...fields,
         },
         qualificationComplete: false,
@@ -115,11 +165,15 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
     },
   });
 
-  // 6. Use Claude to craft the first message
+  // 7. Build first message — use scored template if form data available, otherwise AI-generated
   const aiConfig = tenant.aiConfig as Record<string, any>;
-  const firstMessage = await craftFirstMessage(tenant, contact, fields, aiConfig);
+  const clinicName = findFieldByKeywords(fields, ['nome+clinica', 'consultorio', 'nome+clinic']) ?? null;
 
-  // 7. Send via WhatsApp
+  const firstMessage = formScoring
+    ? buildScoredFirstMessage(name, clinicName, formScoring)
+    : await craftFirstMessage(tenant, contact, fields, aiConfig);
+
+  // 8. Send via WhatsApp
   await sendMessage({
     tenantId: tenant.id,
     conversationId: conversation.id,
@@ -128,7 +182,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
     text: firstMessage,
   });
 
-  // 8. Update contact status
+  // 9. Update contact status
   await prisma.contact.update({
     where: { id: contact.id },
     data: { leadStatus: 'qualifying', lastContactAt: new Date() },
@@ -142,6 +196,33 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
 
 // ── Facebook Graph API ──────────────────────────────────────────
 
+/**
+ * Debug endpoint: GET /api/facebook/debug-lead/:leadgenId
+ * Re-fetches a lead from Graph API and shows raw fields + scoring result.
+ * Use the leadgenId from your Railway logs to see exactly what Facebook sends.
+ */
+export async function debugFacebookLead(leadgenId: string): Promise<{
+  raw: FacebookLeadResponse | null;
+  parsedFields: Record<string, string>;
+  scoring: { noShowValue?: string; ticketValue?: string; result: any };
+}> {
+  const leadData = await fetchLeadFromFacebook(leadgenId);
+  if (!leadData) {
+    return { raw: null, parsedFields: {}, scoring: { result: null } };
+  }
+
+  const fields = parseLeadFields(leadData.field_data);
+  const noShowValue = findFieldByKeywords(fields, ['faltas', 'cancelamentos', 'no_show']);
+  const ticketValue = findFieldByKeywords(fields, ['ticket_medio', 'ticket_médio', 'ticket']);
+  const result = calculateFormLeadScore(noShowValue, ticketValue);
+
+  return {
+    raw: leadData,
+    parsedFields: fields,
+    scoring: { noShowValue, ticketValue, result },
+  };
+}
+
 async function fetchLeadFromFacebook(leadgenId: string): Promise<FacebookLeadResponse | null> {
   const token = env.FACEBOOK_PAGE_ACCESS_TOKEN;
   if (!token) {
@@ -150,7 +231,7 @@ async function fetchLeadFromFacebook(leadgenId: string): Promise<FacebookLeadRes
   }
 
   try {
-    const url = `https://graph.facebook.com/v19.0/${leadgenId}?access_token=${token}`;
+    const url = `https://graph.facebook.com/v19.0/${leadgenId}?fields=id,created_time,field_data&access_token=${token}`;
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -159,7 +240,9 @@ async function fetchLeadFromFacebook(leadgenId: string): Promise<FacebookLeadRes
       return null;
     }
 
-    return (await response.json()) as FacebookLeadResponse;
+    const data = (await response.json()) as FacebookLeadResponse;
+    logger.info({ leadgenId, fieldCount: data.field_data?.length ?? 0, fieldNames: data.field_data?.map(f => f.name) }, 'Facebook Graph API raw response field names');
+    return data;
   } catch (err) {
     logger.error({ err, leadgenId }, 'Failed to fetch lead from Facebook Graph API');
     return null;
@@ -260,7 +343,7 @@ async function craftFirstMessage(
 
 function buildLeadContextMessage(name: string | null, fields: Record<string, string>): string {
   const parts = [
-    `[SISTEMA] Este é um novo lead que acabou de preencher um formulário no Facebook/Instagram.`,
+    `[SISTEMA] Este é um novo lead que acabou de preencher um formulário no Facebook.`,
   ];
 
   if (name) parts.push(`Nome: ${name}`);
@@ -272,7 +355,7 @@ function buildLeadContextMessage(name: string | null, fields: Record<string, str
   }
 
   parts.push('');
-  parts.push('Envie uma primeira mensagem acolhedora e personalizada para este lead no WhatsApp. Mencione que viu o interesse dele(a) e pergunte como pode ajudar. NÃO mencione "Facebook" ou "formulário" — seja natural como se estivesse iniciando uma conversa.');
+  parts.push('Envie uma primeira mensagem acolhedora e personalizada para este lead no WhatsApp. IMPORTANTE: Mencione que ele(a) preencheu o formulário no Facebook para que saiba de onde estamos entrando em contato. Pergunte como pode ajudar.');
 
   return parts.join('\n');
 }
@@ -293,12 +376,46 @@ function extractReplyText(rawText: string): string {
 
 function buildFallbackMessage(businessName: string, name: string | null): string {
   const greeting = name ? `Olá, ${name}!` : 'Olá!';
-  return `${greeting} Tudo bem? Aqui é da ${businessName}. Vi que você demonstrou interesse nos nossos serviços. Como posso te ajudar? 😊`;
+  return `${greeting} Tudo bem? Aqui é da ${businessName}. Vi que você preencheu nosso formulário no Facebook e demonstrou interesse nos nossos serviços. Como posso te ajudar? 😊`;
+}
+
+// ── Field Matching ──────────────────────────────────────────────
+
+/**
+ * Find a field value by searching for keywords in field names.
+ * Facebook sends field names as slugified versions of the full question text,
+ * e.g. "quantas_faltas_ou_cancelamentos_você_tem_por_mês?_(média)"
+ *
+ * Handles accented characters (e.g., "médio" matches "medio") and punctuation.
+ */
+export function findFieldByKeywords(fields: Record<string, string>, keywords: string[]): string | undefined {
+  // 1. Exact match on field name
+  for (const keyword of keywords) {
+    if (fields[keyword]) return fields[keyword];
+  }
+
+  const normalizeStr = (s: string) =>
+    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+  // 2. Fuzzy match — normalize both sides and check if the field name contains the keyword.
+  //    Supports compound keywords with "+" meaning ALL parts must be present in the field name.
+  //    Example: "nome+clinica" matches "nome_da_sua_clínica" but NOT "ticket_médio_da_sua_clínica"
+  for (const [fieldName, value] of Object.entries(fields)) {
+    const normalizedField = normalizeStr(fieldName);
+    for (const keyword of keywords) {
+      const parts = keyword.split('+').map(normalizeStr);
+      if (parts.every(part => normalizedField.includes(part))) {
+        return value;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 // ── Field Parsing ───────────────────────────────────────────────
 
-function parseLeadFields(fieldData: Array<{ name: string; values: string[] }>): Record<string, string> {
+export function parseLeadFields(fieldData: Array<{ name: string; values: string[] }>): Record<string, string> {
   const fields: Record<string, string> = {};
   for (const field of fieldData ?? []) {
     if (field.values && field.values.length > 0) {

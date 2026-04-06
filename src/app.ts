@@ -1,3 +1,5 @@
+import path from 'path';
+import fs from 'fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
@@ -11,6 +13,15 @@ import { registerTrainingRoutes } from './modules/training/training.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
 import { registerFacebookWebhookRoutes } from './modules/facebook/facebook.webhook';
 import { registerAuditLeadRoutes } from './modules/whatsapp/audit-lead.handler';
+import { registerBillingRoutes } from './modules/billing/billing.routes';
+import { registerStripeWebhookRoutes } from './modules/billing/stripe.webhook';
+import { registerPortalRoutes } from './modules/portal/portal.routes';
+import { registerReviewRoutes } from './modules/review/review.routes';
+import { registerAuthRoutes } from './modules/auth/auth.routes';
+import { registerContactRoutes } from './modules/contact/contact.routes';
+import { registerAdminRoutes } from './modules/admin/admin.routes';
+import { registerWebChatRoutes } from './modules/webchat/webchat.routes';
+import { registerDiagnosticWebhookRoutes } from './modules/diagnostic/diagnostic.webhook';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
@@ -38,8 +49,24 @@ export async function buildApp() {
   // ─── Plugins ──────────────────────────────────────────────
 
   await app.register(cors, {
-    origin: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    delegator: (req, callback) => {
+      // Webchat widget routes must be embeddable on any site
+      if (req.url.startsWith('/api/webchat/')) {
+        return callback(null, {
+          origin: true,
+          methods: ['GET', 'POST', 'OPTIONS'],
+          credentials: false,
+        });
+      }
+      // All other routes: restrict to our own domain in production
+      callback(null, {
+        origin: env.NODE_ENV === 'production'
+          ? [env.WEBHOOK_BASE_URL, `${env.WEBHOOK_BASE_URL}/portal`]
+          : true,
+        methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+        credentials: true,
+      });
+    },
   });
 
   await app.register(helmet, {
@@ -179,6 +206,45 @@ export async function buildApp() {
   app.register(async (instance) => registerCampaignRoutes(instance));
   app.register(async (instance) => registerAnalyticsRoutes(instance));
   app.register(async (instance) => registerTrainingRoutes(instance));
+  app.register(async (instance) => registerBillingRoutes(instance));
+  app.register(async (instance) => registerStripeWebhookRoutes(instance));
+  app.register(async (instance) => registerPortalRoutes(instance));
+  app.register(async (instance) => registerReviewRoutes(instance));
+  app.register(async (instance) => registerAuthRoutes(instance));
+  app.register(async (instance) => registerContactRoutes(instance));
+  app.register(async (instance) => registerAdminRoutes(instance));
+  app.register(async (instance) => registerDiagnosticWebhookRoutes(instance));
+
+  // Web chat widget — CORS is handled by the global delegator above
+  app.register(async (instance) => registerWebChatRoutes(instance));
+
+  // ─── Client Portal (React SPA) ─────────────────────────────
+  const portalDistDir = path.join(__dirname, '..', 'client', 'dist');
+
+  if (fs.existsSync(portalDistDir)) {
+    // Serve static assets from Vite build output.
+    // wildcard: false prevents @fastify/static from registering its own
+    // catch-all GET /portal/* so we can add an SPA fallback route below.
+    const fastifyStatic = await import('@fastify/static');
+    await app.register(fastifyStatic.default, {
+      root: portalDistDir,
+      prefix: '/portal/',
+      decorateReply: false,
+      wildcard: false,
+    });
+
+    const serveIndex = async (_request: any, reply: any) => {
+      const indexPath = path.join(portalDistDir, 'index.html');
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      return reply.type('text/html').send(html);
+    };
+
+    // SPA fallback — serve index.html for all /portal/* routes not matching a file
+    app.get('/portal/*', serveIndex);
+
+    // Also handle exact /portal route
+    app.get('/portal', serveIndex);
+  }
 
   // ─── Error Handler ────────────────────────────────────────
 

@@ -8,9 +8,17 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   API_KEY: z.string().min(1).default('not-set'),
   ADMIN_PASSWORD: z.string().optional(),
+  JWT_SECRET: z.string().min(1).default('lk-chatbot-jwt-secret-change-me'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
 
   DATABASE_URL: z.string().default(''),
   REDIS_URL: z.string().default(''),
+
+  // SMTP (optional — for email notifications)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
 
   EVOLUTION_API_URL: z.string().default(''),
   EVOLUTION_API_KEY: z.string().default(''),
@@ -30,6 +38,16 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),
 
+  // Stripe billing
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_STARTER_PRICE_ID: z.string().optional(),
+  STRIPE_PRO_PRICE_ID: z.string().optional(),
+  STRIPE_ENTERPRISE_PRICE_ID: z.string().optional(),
+
+  // Diagnostic tool integration
+  DIAGNOSTIC_WEBHOOK_SECRET: z.string().optional(),
+
   WEBHOOK_BASE_URL: z.string().default('http://localhost:3000'),
 });
 
@@ -47,6 +65,13 @@ function loadEnv() {
   if (!data.DATABASE_URL) console.warn('DATABASE_URL not set — database features disabled');
   if (!data.EVOLUTION_API_URL) console.warn('EVOLUTION_API_URL not set — WhatsApp features disabled');
   if (data.API_KEY === 'not-set') console.warn('API_KEY not set — using placeholder');
+  if (data.JWT_SECRET === 'lk-chatbot-jwt-secret-change-me') {
+    if (data.NODE_ENV === 'production') {
+      console.error('CRITICAL: JWT_SECRET is using the default value in production! Set a strong random secret.');
+    } else {
+      console.warn('JWT_SECRET using default value — set a strong secret before deploying');
+    }
+  }
 
   return data;
 }

@@ -8,6 +8,7 @@ import { buildQualificationPrompt } from './prompts/qualification.prompt';
 import { bookingService } from '../modules/booking/booking.service';
 import { campaignService } from '../modules/campaign/campaign.service';
 import { notificationService } from '../modules/notification/notification.service';
+import { reviewService } from '../modules/review/review.service';
 import {
   MessageJobData,
   AiMessage,
@@ -106,6 +107,18 @@ export async function processMessage(job: MessageJobData): Promise<void> {
       where: { id: conversationId },
       data: { context: cleanContext },
     });
+  }
+
+  // 5c. Intercept review responses — skip AI call if awaiting rating
+  if (context.state === 'awaiting_review' && context.pendingReviewId && text) {
+    const handled = await handleReviewResponse(
+      tenant, contact, context, conversationId, phone, text,
+    );
+    if (handled) {
+      await incrementMessageCount(tenantId);
+      return;
+    }
+    // If not a valid rating, fall through to AI (patient might be asking something else)
   }
 
   // 6. Handle non-text messages
@@ -611,6 +624,145 @@ async function applySideEffects(
   } catch (err) {
     logger.error({ err }, 'Failed to send notification');
   }
+}
+
+// ── Review Response Handling ─────────────────────────────────
+
+/**
+ * Parse a patient's message for a 1-5 rating.
+ * Handles: "5", "nota 5", "dou 4", "4 estrelas", "5/5", "cinco", etc.
+ */
+function parseRating(text: string): number | null {
+  const normalized = text.toLowerCase().trim();
+
+  // Direct number: "5", "3"
+  const directNum = normalized.match(/^(\d)$/);
+  if (directNum) {
+    const n = parseInt(directNum[1], 10);
+    if (n >= 1 && n <= 5) return n;
+  }
+
+  // Written numbers in Portuguese
+  const wordMap: Record<string, number> = {
+    um: 1, uma: 1, dois: 2, duas: 2, tres: 3, três: 3,
+    quatro: 4, cinco: 5,
+  };
+  for (const [word, val] of Object.entries(wordMap)) {
+    if (normalized === word || normalized.includes(`nota ${word}`) || normalized.includes(`dou ${word}`)) {
+      return val;
+    }
+  }
+
+  // Patterns: "nota 5", "dou nota 4", "4 estrelas", "5/5", "nota: 3"
+  const patternMatch = normalized.match(/(?:nota\s*:?\s*|dou\s+(?:nota\s+)?|avalio\s+(?:com\s+)?)(\d)/);
+  if (patternMatch) {
+    const n = parseInt(patternMatch[1], 10);
+    if (n >= 1 && n <= 5) return n;
+  }
+
+  const starsMatch = normalized.match(/(\d)\s*(?:estrela|star)/);
+  if (starsMatch) {
+    const n = parseInt(starsMatch[1], 10);
+    if (n >= 1 && n <= 5) return n;
+  }
+
+  const slashMatch = normalized.match(/(\d)\s*\/\s*5/);
+  if (slashMatch) {
+    const n = parseInt(slashMatch[1], 10);
+    if (n >= 1 && n <= 5) return n;
+  }
+
+  return null;
+}
+
+/**
+ * Handle a message when conversation is in awaiting_review state.
+ * Returns true if the message was handled as a review response.
+ */
+async function handleReviewResponse(
+  tenant: any,
+  contact: any,
+  context: ConversationContext,
+  conversationId: string,
+  phone: string,
+  text: string,
+): Promise<boolean> {
+  const rating = parseRating(text);
+  if (rating === null) return false; // Not a rating — let AI handle it
+
+  const reviewId = context.pendingReviewId!;
+  const contactName = contact.name ?? '';
+
+  // Record the rating
+  try {
+    await reviewService.recordResponse(reviewId, rating, text);
+  } catch (err) {
+    logger.error({ err, reviewId }, 'Failed to record review response');
+    return false;
+  }
+
+  // Build follow-up based on NPS-style tiers
+  let replyText: string;
+  const reviewConfig = (tenant.reviewConfig as { googleUrl?: string; facebookUrl?: string } | null) ?? {};
+  const externalLink = reviewConfig.googleUrl || reviewConfig.facebookUrl;
+
+  if (rating >= 4) {
+    // Promoter (4-5): Thank + ask for public review if external link available
+    replyText = `Muito obrigado${contactName ? `, ${contactName}` : ''}! Ficamos muito felizes com sua avaliacao! `;
+    if (externalLink) {
+      replyText += `\n\nSe puder nos ajudar com uma avaliacao publica, agradecemos demais:\n${externalLink}`;
+    } else {
+      replyText += `Seu feedback nos motiva a melhorar cada vez mais!`;
+    }
+  } else if (rating === 3) {
+    // Passive (3): Thank + ask for improvement suggestions
+    replyText = `Obrigado pelo feedback${contactName ? `, ${contactName}` : ''}! ` +
+      `Queremos sempre melhorar. Tem alguma sugestao do que poderiamos fazer melhor?`;
+  } else {
+    // Detractor (1-2): Apologize + escalate
+    replyText = `Lamentamos que sua experiencia nao tenha sido a melhor${contactName ? `, ${contactName}` : ''}. ` +
+      `Vamos encaminhar seu feedback para nossa equipe para que possamos resolver isso. Obrigado por nos informar!`;
+
+    // Escalate to business owner
+    try {
+      await notificationService.notifyEscalation(
+        tenant.id,
+        contactName,
+        phone,
+      );
+    } catch (err) {
+      logger.error({ err }, 'Failed to send escalation for low review');
+    }
+  }
+
+  // Send the follow-up
+  await sendMessage({
+    tenantId: tenant.id,
+    conversationId,
+    instanceName: tenant.evolutionInstanceId!,
+    phone,
+    text: replyText,
+  });
+
+  // Update conversation context: move back to closed, clear review state
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: {
+      context: {
+        ...context,
+        state: 'closed' as const,
+        pendingReviewId: undefined,
+      },
+      lastMessageAt: new Date(),
+    },
+  });
+
+  logger.info(
+    { phone, rating, reviewId, tier: rating >= 4 ? 'promoter' : rating === 3 ? 'passive' : 'detractor' },
+    'Review response captured',
+  );
+
+  return true;
 }
 
 async function trackCampaignFunnel(

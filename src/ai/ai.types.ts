@@ -36,6 +36,7 @@ export type ConversationState =
   | 'qualifying'
   | 'qualified'
   | 'booking'
+  | 'awaiting_review'
   | 'closed';
 
 // ── Conversation Context (stored in conversation.context JSON) ──
@@ -46,6 +47,7 @@ export interface ConversationContext {
   qualificationComplete: boolean;
   lastSummary?: string;
   messageCount: number;
+  pendingReviewId?: string; // Review ID when awaiting rating response
 }
 
 // ── AI Structured Response ──────────────────────────────────
