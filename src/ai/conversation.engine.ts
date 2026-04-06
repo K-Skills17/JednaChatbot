@@ -85,9 +85,28 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   }
 
   // 5. Parse existing context or create default
-  const context: ConversationContext = conversation.context
-    ? { ...DEFAULT_CONTEXT, ...(conversation.context as Record<string, any>) }
+  const rawContext = conversation.context as Record<string, any> | null;
+  const context: ConversationContext = rawContext
+    ? { ...DEFAULT_CONTEXT, ...rawContext }
     : { ...DEFAULT_CONTEXT };
+
+  // 5b. Check human takeover — skip AI if a human operator is actively handling this conversation
+  if (rawContext?.humanTakeoverUntil) {
+    const takeoverEnd = new Date(rawContext.humanTakeoverUntil);
+    if (takeoverEnd > new Date()) {
+      logger.info(
+        { phone, humanTakeoverUntil: rawContext.humanTakeoverUntil },
+        'Skipping AI — human operator is handling this conversation',
+      );
+      return;
+    }
+    // Takeover expired — clean up the flag
+    const { humanTakeoverUntil: _, ...cleanContext } = rawContext;
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { context: cleanContext },
+    });
+  }
 
   // 6. Handle non-text messages
   const aiConfig = tenant.aiConfig as Record<string, any>;
@@ -114,6 +133,15 @@ export async function processMessage(job: MessageJobData): Promise<void> {
         closingMessage: aiConfig.closingMessage,
         escalationRules: aiConfig.escalationRules,
         forbiddenTopics: aiConfig.forbiddenTopics,
+        // Hormozi framework fields
+        painPoints: aiConfig.painPoints,
+        dreamOutcome: aiConfig.dreamOutcome,
+        uniqueMechanism: aiConfig.uniqueMechanism,
+        socialProof: aiConfig.socialProof,
+        scarcity: aiConfig.scarcity,
+        urgency: aiConfig.urgency,
+        leadMagnet: aiConfig.leadMagnet,
+        referralIncentive: aiConfig.referralIncentive,
       },
     },
     {
