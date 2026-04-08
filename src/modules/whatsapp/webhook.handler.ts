@@ -76,6 +76,12 @@ const HUMAN_TAKEOVER_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 async function handleIncomingMessage(instanceName: string, data: MessageData): Promise<void> {
   // Detect human operator messages (sent from the WhatsApp app, not the bot)
+  // Ignore group messages — only process private (1-to-1) chats
+  if (data.key.remoteJid.endsWith('@g.us')) {
+    logger.debug({ remoteJid: data.key.remoteJid }, 'Group message ignored');
+    return;
+  }
+
   if (data.key.fromMe) {
     await handleHumanOperatorMessage(instanceName, data);
     return;
