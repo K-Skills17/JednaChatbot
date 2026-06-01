@@ -13,6 +13,7 @@ import {
   startReviewExpirationScheduler,
   startDailySummaryScheduler,
   startDiagnosticWorker,
+  startKeepaliveScheduler,
   stopAllWorkers,
 } from './jobs/queue.setup';
 import { logger } from './utils/logger';
@@ -50,6 +51,7 @@ async function main() {
       startFacebookLeadWorker();
       startReviewWorker();
       startDiagnosticWorker();
+      await startKeepaliveScheduler();
       await startReviewExpirationScheduler();
       await startDailySummaryScheduler();
     } catch (err) {

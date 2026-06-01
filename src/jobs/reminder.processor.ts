@@ -63,7 +63,7 @@ export async function reminderProcessor(job: Job<ReminderJobData | NoShowJobData
     return;
   }
 
-  const formattedDate = formatDatePtBr(booking.scheduledAt, booking.tenant.timezone);
+  const formattedDate = formatDatePtBr(booking.scheduledAt ?? new Date(), booking.tenant.timezone);
   const contactName = booking.contact.name ?? '';
 
   let reminderText: string;
@@ -165,7 +165,7 @@ async function noShowFollowUpProcessor(job: Job<NoShowJobData>): Promise<void> {
   }
 
   const contactName = booking.contact.name ?? '';
-  const formattedDate = formatDatePtBr(booking.scheduledAt, booking.tenant.timezone);
+  const formattedDate = formatDatePtBr(booking.scheduledAt ?? new Date(), booking.tenant.timezone);
 
   const followUpText =
     `Oi${contactName ? ` ${contactName}` : ''}! Notamos que não conseguiu comparecer ao agendamento de ${formattedDate}. ` +
