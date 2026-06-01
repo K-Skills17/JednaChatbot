@@ -22,6 +22,7 @@ import { registerContactRoutes } from './modules/contact/contact.routes';
 import { registerAdminRoutes } from './modules/admin/admin.routes';
 import { registerWebChatRoutes } from './modules/webchat/webchat.routes';
 import { registerDiagnosticWebhookRoutes } from './modules/diagnostic/diagnostic.webhook';
+import { registerLeadIntakeRoutes } from './modules/lead-intake/lead-intake.routes';
 import { env } from './config/env';
 import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
@@ -214,6 +215,7 @@ export async function buildApp() {
   app.register(async (instance) => registerContactRoutes(instance));
   app.register(async (instance) => registerAdminRoutes(instance));
   app.register(async (instance) => registerDiagnosticWebhookRoutes(instance));
+  app.register(async (instance) => registerLeadIntakeRoutes(instance));
 
   // Web chat widget — CORS is handled by the global delegator above
   app.register(async (instance) => registerWebChatRoutes(instance));

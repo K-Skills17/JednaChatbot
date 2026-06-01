@@ -49,6 +49,10 @@ const envSchema = z.object({
   DIAGNOSTIC_WEBHOOK_SECRET: z.string().optional(),
 
   WEBHOOK_BASE_URL: z.string().default('http://localhost:3000'),
+
+  // Concierge debounce & webhook auth
+  DEBOUNCE_MS: z.coerce.number().default(10000),
+  WEBHOOK_SHARED_SECRET: z.string().optional(),
 });
 
 function loadEnv() {

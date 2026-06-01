@@ -32,16 +32,26 @@ model Tenant {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  contacts      Contact[]
-  conversations Conversation[]
-  messages      Message[]
-  bookings      Booking[]
-  campaigns     Campaign[]
-  notifications Notification[]
-  subscriptions Subscription[]
-  invoices      Invoice[]
-  reviews       Review[]
-  users         TenantUser[]
+  // Concierge-specific fields (dental/medical compliance)
+  qualificationRules Json?    @map("qualification_rules") // { weights, near_term_keywords, qualified_threshold }
+  handoffNumber      String?  @map("handoff_number")       // WhatsApp number for clinic staff notifications
+  assessmentDesc     String?  @map("assessment_desc")      // Description of the evaluation/consultation
+  toneNotes          String?  @map("tone_notes")           // Extra tone guidance for the AI
+  complianceEnabled  Boolean  @default(false) @map("compliance_enabled") // Enable CFO/CRO compliance gate
+
+  contacts        Contact[]
+  conversations   Conversation[]
+  messages        Message[]
+  bookings        Booking[]
+  campaigns       Campaign[]
+  notifications   Notification[]
+  subscriptions   Subscription[]
+  invoices        Invoice[]
+  reviews         Review[]
+  users           TenantUser[]
+  complianceAudits ComplianceAudit[]
+  handoffs        Handoff[]
+  events          Event[]
 
   @@map("tenants")
 }
@@ -126,6 +136,7 @@ model Contact {
   bookings      Booking[]
   campaignContacts CampaignContact[]
   reviews       Review[]
+  handoffs      Handoff[]
 
   @@unique([tenantId, phone])
   @@index([tenantId, phone])
@@ -140,6 +151,7 @@ model Conversation {
   contactId     String    @map("contact_id")
   channel       String    @default("whatsapp") // whatsapp, web
   status        String    @default("active") // active, paused, closed, escalated
+  stage         String    @default("saudacao") // saudacao, descoberta, qualificacao, valor, agendamento, encaminhamento, encerramento
   context       Json?     // AI conversation summary/context
   startedAt     DateTime  @default(now()) @map("started_at")
   lastMessageAt DateTime? @map("last_message_at")
@@ -148,6 +160,7 @@ model Conversation {
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   contact  Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   messages Message[]
+  handoffs Handoff[]
 
   @@index([tenantId, contactId])
   @@map("conversations")
@@ -173,6 +186,9 @@ model Message {
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  complianceAudits ComplianceAudit[]
+
+  @@unique([whatsappMessageId])
   @@index([conversationId, createdAt])
   @@map("messages")
 }
@@ -184,9 +200,11 @@ model Booking {
   tenantId        String   @map("tenant_id")
   contactId       String   @map("contact_id")
   appointmentType String?  @map("appointment_type")
-  scheduledAt     DateTime @map("scheduled_at")
-  durationMinutes Int      @default(30) @map("duration_minutes")
-  status          String   @default("confirmed") // confirmed, cancelled, completed, no_show
+  scheduledAt      DateTime? @map("scheduled_at")
+  preferredDay     String?   @map("preferred_day")     // e.g. "segunda", "terça", "2026-06-01"
+  preferredPeriod  String?   @map("preferred_period")  // e.g. "manha", "tarde", "noite"
+  durationMinutes  Int       @default(30) @map("duration_minutes")
+  status           String    @default("confirmed") // confirmed, cancelled, completed, no_show, solicitado
   calendarEventId String?  @map("calendar_event_id")
   meetLink        String?  @map("meet_link")
   reminderSent    Boolean  @default(false) @map("reminder_sent")
@@ -324,4 +342,63 @@ model Review {
   @@index([tenantId])
   @@index([tenantId, status])
   @@map("reviews")
+}
+
+// ─── Compliance Audit (CFO/CRO Gate) ──────────────────────────
+
+model ComplianceAudit {
+  id             String   @id @default(uuid())
+  messageId      String?  @map("message_id")
+  conversationId String   @map("conversation_id")
+  tenantId       String   @map("tenant_id")
+  outboundText   String   @map("outbound_text")
+  model          String
+  checks         Json     // { regex_flags: string[], model_flag: boolean }
+  passed         Boolean
+  flaggedTerms   String[] @map("flagged_terms")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  message Message? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([conversationId])
+  @@map("compliance_audits")
+}
+
+// ─── Handoffs (Escalation to Human Staff) ─────────────────────
+
+model Handoff {
+  id             String   @id @default(uuid())
+  leadId         String   @map("lead_id")
+  conversationId String   @map("conversation_id")
+  tenantId       String   @map("tenant_id")
+  reason         String?  // agendamento, compliance, emergencia, user_request, etc.
+  summary        String?
+  status         String   @default("pendente") // pendente, atendido, encerrado
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  contact      Contact      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@map("handoffs")
+}
+
+// ─── Events (Event Sourcing / Activity Log) ───────────────────
+
+model Event {
+  id        String   @id @default(uuid())
+  leadId    String?  @map("lead_id")
+  tenantId  String   @map("tenant_id")
+  type      String   // message_in, lead_in, message_out, agendar, encaminhar, desqualificar, opt_out, continuar
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, type])
+  @@index([tenantId, createdAt])
+  @@map("events")
 }

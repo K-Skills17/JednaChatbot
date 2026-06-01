@@ -12,6 +12,7 @@ import { dailySummaryProcessor } from './daily-summary.processor';
 import { reviewRequestProcessor } from './review-request.processor';
 import { reviewExpirationProcessor } from './review-expiration.processor';
 import { diagnosticProcessor } from '../modules/diagnostic/diagnostic.processor';
+import { keepaliveProcessor } from './keepalive.processor';
 
 function getConnection() {
   return { connection: buildRedisOptions(env.REDIS_URL) };
@@ -73,6 +74,12 @@ let _diagnosticQueue: Queue | null = null;
 export function getDiagnosticQueue(): Queue {
   if (!_diagnosticQueue) _diagnosticQueue = new Queue('diagnostic-results', getConnection());
   return _diagnosticQueue;
+}
+
+let _keepaliveQueue: Queue | null = null;
+function getKeepaliveQueue(): Queue {
+  if (!_keepaliveQueue) _keepaliveQueue = new Queue('whatsapp-keepalive', getConnection());
+  return _keepaliveQueue;
 }
 
 let _dailySummaryQueue: Queue | null = null;
@@ -292,6 +299,39 @@ export function startDiagnosticWorker(): void {
 
   activeWorkers.push(worker);
   logger.info('Diagnostic processing worker started');
+}
+
+export async function startKeepaliveScheduler(): Promise<void> {
+  await getKeepaliveQueue().add(
+    'whatsapp-keepalive-tick',
+    {},
+    {
+      repeat: { every: 5 * 60 * 1000 }, // Every 5 minutes
+      removeOnComplete: 5,
+      removeOnFail: 10,
+    },
+  );
+
+  const worker = new Worker(
+    'whatsapp-keepalive',
+    keepaliveProcessor,
+    getConnection(),
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Keepalive tick completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Keepalive tick failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err }, 'Keepalive worker error');
+  });
+
+  activeWorkers.push(worker);
+  logger.info('WhatsApp keepalive scheduler started (every 5 minutes)');
 }
 
 export async function startReviewExpirationScheduler(): Promise<void> {

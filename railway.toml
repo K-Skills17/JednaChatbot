@@ -6,3 +6,11 @@ healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+
+# Railway injects DATABASE_URL and REDIS_URL from attached plugins automatically.
+# No hand-pasted connection strings needed. In the Railway dashboard, link the
+# Postgres and Redis plugins to this service — the variables are auto-populated.
+#
+# If you need to reference them explicitly in Railway's variable UI:
+#   DATABASE_URL = ${{Postgres.DATABASE_URL}}
+#   REDIS_URL    = ${{Redis.REDIS_URL}}

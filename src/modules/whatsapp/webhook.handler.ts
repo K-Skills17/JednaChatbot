@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../config/database';
+import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import { fromWhatsAppJid } from '../../utils/phone.utils';
 import { getMessageQueue } from '../../jobs/queue.setup';
@@ -165,27 +166,40 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     }
   }
 
-  // Store inbound message (deduplicate by whatsappMessageId)
-  const existingMessage = await prisma.message.findFirst({
-    where: { whatsappMessageId: data.key.id },
-    select: { id: true },
-  });
-
-  if (existingMessage) {
-    logger.debug({ whatsappMessageId: data.key.id }, 'Duplicate message ignored');
-    return;
+  // Store inbound message (deduplicate by whatsappMessageId unique index)
+  try {
+    await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        tenantId: tenant.id,
+        direction: 'inbound',
+        messageType,
+        content: text,
+        whatsappMessageId: data.key.id,
+      },
+    });
+  } catch (err: any) {
+    // Unique constraint violation = duplicate webhook delivery
+    if (err?.code === 'P2002') {
+      logger.debug({ whatsappMessageId: data.key.id }, 'Duplicate message ignored (unique constraint)');
+      return;
+    }
+    throw err;
   }
 
-  await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      tenantId: tenant.id,
-      direction: 'inbound',
-      messageType,
-      content: text,
-      whatsappMessageId: data.key.id,
-    },
-  });
+  // Log inbound event
+  try {
+    await prisma.event.create({
+      data: {
+        tenantId: tenant.id,
+        leadId: contact.id,
+        type: 'message_in',
+        payload: { phone, messageType },
+      },
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to log inbound event');
+  }
 
   // Update conversation timestamp
   await prisma.conversation.update({
@@ -193,7 +207,21 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     data: { lastMessageAt: new Date() },
   });
 
-  // Queue for AI processing with retry config
+  // Queue for AI processing with debounce:
+  // If messages arrive within DEBOUNCE_MS, only process once (after the user stops typing).
+  // This prevents wasted AI calls on rapid multi-message inputs.
+  const DEBOUNCE_MS = env.DEBOUNCE_MS;
+  const debounceJobId = `turn:${conversation.id}`;
+
+  // Remove any existing pending debounced job for this conversation
+  const existingJob = await getMessageQueue().getJob(debounceJobId);
+  if (existingJob) {
+    const state = await existingJob.getState();
+    if (state === 'delayed' || state === 'waiting') {
+      await existingJob.remove();
+    }
+  }
+
   await getMessageQueue().add('process-message', {
     tenantId: tenant.id,
     contactId: contact.id,
@@ -203,6 +231,8 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     messageType,
     senderName,
   }, {
+    jobId: debounceJobId,
+    delay: DEBOUNCE_MS,
     attempts: 3,
     backoff: { type: 'exponential', delay: 2000 },
   });
