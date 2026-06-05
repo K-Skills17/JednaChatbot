@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
@@ -255,6 +256,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
       try {
         await prisma.booking.create({
           data: {
+            id: crypto.randomUUID(),
             tenantId,
             contactId,
             appointmentType: context.extractedData?.appointmentType ?? 'avaliacao',
@@ -293,6 +295,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   });
   await prisma.complianceAudit.create({
     data: {
+      id: crypto.randomUUID(),
       messageId: lastMsg?.id ?? null,
       conversationId,
       tenantId,
@@ -313,6 +316,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
 
     await prisma.handoff.create({
       data: {
+        id: crypto.randomUUID(),
         leadId: contactId,
         conversationId,
         tenantId,
@@ -409,6 +413,7 @@ async function insertEvent(
   try {
     await prisma.event.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId,
         leadId: leadId ?? undefined,
         type,

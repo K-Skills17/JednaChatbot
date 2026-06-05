@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { evolutionClient } from './evolution.client';
 import { logger } from '../../utils/logger';
@@ -24,6 +25,7 @@ export async function sendMessage(options: SendMessageOptions): Promise<void> {
 
     await prisma.message.create({
       data: {
+        id: crypto.randomUUID(),
         conversationId,
         tenantId,
         direction: 'outbound',
