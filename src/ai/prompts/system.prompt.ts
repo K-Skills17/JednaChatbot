@@ -51,6 +51,64 @@ interface ContactData {
   qualificationData: Record<string, any> | null;
 }
 
+/**
+ * Brazilian national holidays (fixed dates).
+ * Easter-based holidays (Carnaval, Sexta-feira Santa, Corpus Christi) are computed.
+ */
+function getBrazilianHoliday(date: Date, timezone: string): string | null {
+  // Get date parts in the tenant's timezone
+  const parts = date.toLocaleDateString('en-CA', { timeZone: timezone }).split('-');
+  const year = parseInt(parts[0]);
+  const month = parseInt(parts[1]);
+  const day = parseInt(parts[2]);
+
+  // Fixed holidays
+  const fixed: Record<string, string> = {
+    '1-1': 'Confraternização Universal',
+    '4-21': 'Tiradentes',
+    '5-1': 'Dia do Trabalho',
+    '9-7': 'Independência do Brasil',
+    '10-12': 'Nossa Senhora Aparecida',
+    '11-2': 'Finados',
+    '11-15': 'Proclamação da República',
+    '11-20': 'Consciência Negra',
+    '12-25': 'Natal',
+  };
+
+  const key = `${month}-${day}`;
+  if (fixed[key]) return fixed[key];
+
+  // Easter-based holidays (Meeus algorithm)
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const easterMonth = Math.floor((h + l - 7 * m + 114) / 31);
+  const easterDay = ((h + l - 7 * m + 114) % 31) + 1;
+  const easter = new Date(year, easterMonth - 1, easterDay);
+
+  const msPerDay = 86400000;
+  const dateMs = new Date(year, month - 1, day).getTime();
+  const easterMs = easter.getTime();
+
+  const diff = Math.round((dateMs - easterMs) / msPerDay);
+
+  if (diff === -47) return 'Carnaval (terça)';
+  if (diff === -48) return 'Carnaval (segunda)';
+  if (diff === -2) return 'Sexta-feira Santa';
+  if (diff === 60) return 'Corpus Christi';
+
+  return null;
+}
+
 /** Build the full system prompt for the conversation AI */
 export function buildSystemPrompt(
   tenant: TenantData,
@@ -193,9 +251,16 @@ function buildBusinessContext(tenant: TenantData): string {
   for (let i = 1; i <= 14; i++) {
     const future = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
     const dayName = future.toLocaleDateString('pt-BR', { timeZone: tenant.timezone, weekday: 'long' });
-    const dateStr = future.toLocaleDateString('pt-BR', { timeZone: tenant.timezone, day: '2-digit', month: '2-digit' });
+    const dateStr = future.toLocaleDateString('pt-BR', { timeZone: tenant.timezone, day: '2-digit', month: '2-digit', year: 'numeric' });
     const isWorkDay = tenant.businessHours.days.includes(future.getDay());
-    upcomingDays.push(`  ${dayName} ${dateStr}${isWorkDay ? ' ✓' : ' (fechado)'}`);
+    const holiday = getBrazilianHoliday(future, tenant.timezone);
+    if (holiday) {
+      upcomingDays.push(`  ${dayName} ${dateStr} (FERIADO: ${holiday})`);
+    } else if (!isWorkDay) {
+      upcomingDays.push(`  ${dayName} ${dateStr} (fechado)`);
+    } else {
+      upcomingDays.push(`  ${dayName} ${dateStr} ✓ disponível`);
+    }
   }
 
   const lines = [
