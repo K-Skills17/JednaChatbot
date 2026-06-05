@@ -80,6 +80,39 @@ export function registerBookingRoutes(app: FastifyInstance): void {
     },
   );
 
+  // Start Google Calendar OAuth — public so it can be opened in a browser
+  app.get(
+    '/api/calendar/connect/:tenantId',
+    async (
+      request: FastifyRequest<{ Params: { tenantId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+        return reply.code(400).send({ error: 'Google Calendar not configured' });
+      }
+
+      const tenant = await prisma.tenant.findUnique({ where: { id: request.params.tenantId } });
+      if (!tenant) return reply.code(404).send({ error: 'Tenant not found' });
+
+      const redirectUri = normalizeRedirectUri(env.GOOGLE_REDIRECT_URI ?? '');
+
+      const oauth2Client = new (getGoogle()).auth.OAuth2(
+        env.GOOGLE_CLIENT_ID,
+        env.GOOGLE_CLIENT_SECRET,
+        redirectUri,
+      );
+
+      const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['https://www.googleapis.com/auth/calendar'],
+        state: request.params.tenantId,
+        prompt: 'consent',
+      });
+
+      return reply.redirect(authUrl);
+    },
+  );
+
   // All other booking routes require API key
   app.addHook('preHandler', authMiddleware);
 
