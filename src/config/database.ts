@@ -1,4 +1,4 @@
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { env } from './env';
 
 // Lazy singleton — PrismaClient is only created when first accessed,
