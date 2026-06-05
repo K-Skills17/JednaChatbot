@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
@@ -97,11 +98,12 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     return;
   }
 
-  // Upsert contact
+  // Upsert contact — explicit UUID to work around Prisma 7 adapter-pg bug
   const contact = await prisma.contact.upsert({
     where: { tenantId_phone: { tenantId: tenant.id, phone } },
     update: { lastContactAt: new Date(), name: senderName ?? undefined },
     create: {
+      id: crypto.randomUUID(),
       tenantId: tenant.id,
       phone,
       name: senderName,
@@ -151,6 +153,7 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
       // Create a new conversation with proper initial context
       conversation = await prisma.conversation.create({
         data: {
+          id: crypto.randomUUID(),
           tenantId: tenant.id,
           contactId: contact.id,
           status: 'active',
@@ -170,6 +173,7 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
   try {
     await prisma.message.create({
       data: {
+        id: crypto.randomUUID(),
         conversationId: conversation.id,
         tenantId: tenant.id,
         direction: 'inbound',
@@ -191,6 +195,7 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
   try {
     await prisma.event.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId: tenant.id,
         leadId: contact.id,
         type: 'message_in',
@@ -282,6 +287,7 @@ async function handleHumanOperatorMessage(instanceName: string, data: MessageDat
   // Store the human message for conversation history
   await prisma.message.create({
     data: {
+      id: crypto.randomUUID(),
       conversationId: conversation.id,
       tenantId: tenant.id,
       direction: 'outbound',
