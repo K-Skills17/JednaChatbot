@@ -26,16 +26,16 @@ function getPrisma(): any {
     // Prisma 7 + adapter-pg generates client-side UUIDs with colons.
     // This extension injects a proper UUID via crypto.randomUUID()
     // before every create/upsert so Prisma never generates a bad one.
-    _extended = _prisma.$extends({
+    _extended = (_prisma as any).$extends({
       query: {
         $allModels: {
-          create({ args, query }: any) {
+          async create({ args, query }: any) {
             if (args.data && !args.data.id) {
               args.data.id = crypto.randomUUID();
             }
             return query(args);
           },
-          createMany({ args, query }: any) {
+          async createMany({ args, query }: any) {
             if (Array.isArray(args.data)) {
               for (const item of args.data) {
                 if (!item.id) item.id = crypto.randomUUID();
@@ -43,7 +43,7 @@ function getPrisma(): any {
             }
             return query(args);
           },
-          upsert({ args, query }: any) {
+          async upsert({ args, query }: any) {
             if (args.create && !args.create.id) {
               args.create.id = crypto.randomUUID();
             }
