@@ -165,21 +165,9 @@ export class BookingService {
       data: { status: 'completed' },
     });
 
-    // Schedule review request (2 hours after completion by default)
-    const tenant = await prisma.tenant.findUnique({ where: { id: booking.tenantId } });
-    const reviewConfig = (tenant?.reviewConfig as { delayHours?: number } | null) ?? {};
-    const delayMs = (reviewConfig.delayHours ?? 2) * 60 * 60 * 1000;
-
-    try {
-      await getReviewQueue().add(
-        'review-request',
-        { bookingId: id, tenantId: booking.tenantId, contactId: booking.contactId },
-        { delay: delayMs, removeOnComplete: 100, removeOnFail: 50 },
-      );
-      logger.info({ bookingId: id, delayMs }, 'Review request scheduled');
-    } catch (err) {
-      logger.warn({ err, bookingId: id }, 'Failed to schedule review request (non-fatal)');
-    }
+    // Review requests are NOT auto-scheduled after meetings.
+    // Reviews should only be requested after the client has completed
+    // actual work with us — triggered manually via the API.
 
     logger.info({ bookingId: id }, 'Booking marked as completed');
     return updated as BookingWithDetails;
