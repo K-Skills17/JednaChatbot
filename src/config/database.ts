@@ -11,6 +11,13 @@ import { env } from './env';
 let _prisma: PrismaClient | null = null;
 let _extended: any = null;
 
+/** Replace Prisma-generated UUIDs that contain colons (adapter-pg bug) */
+function fixId(data: Record<string, any>): void {
+  if (!data.id || (typeof data.id === 'string' && data.id.includes(':'))) {
+    data.id = crypto.randomUUID();
+  }
+}
+
 function getPrisma(): any {
   if (!_extended) {
     if (!env.DATABASE_URL) {
@@ -24,28 +31,28 @@ function getPrisma(): any {
     _prisma = new PrismaClient({ adapter });
 
     // Prisma 7 + adapter-pg generates client-side UUIDs with colons.
-    // This extension injects a proper UUID via crypto.randomUUID()
-    // before every create/upsert so Prisma never generates a bad one.
+    // The @default(uuid()) is applied BEFORE extension hooks run, so
+    // args.data.id is already set to a bad UUID. We must detect and replace it.
     _extended = (_prisma as any).$extends({
       query: {
         $allModels: {
           async create({ args, query }: any) {
-            if (args.data && !args.data.id) {
-              args.data.id = crypto.randomUUID();
+            if (args.data) {
+              fixId(args.data);
             }
             return query(args);
           },
           async createMany({ args, query }: any) {
             if (Array.isArray(args.data)) {
               for (const item of args.data) {
-                if (!item.id) item.id = crypto.randomUUID();
+                fixId(item);
               }
             }
             return query(args);
           },
           async upsert({ args, query }: any) {
-            if (args.create && !args.create.id) {
-              args.create.id = crypto.randomUUID();
+            if (args.create) {
+              fixId(args.create);
             }
             return query(args);
           },
