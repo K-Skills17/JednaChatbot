@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Job } from 'bullmq';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
@@ -124,6 +125,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
       qualificationData,
     },
     create: {
+      id: crypto.randomUUID(),
       tenantId: tenant.id,
       phone: normalizedPhone,
       name,
@@ -138,6 +140,7 @@ export async function facebookLeadProcessor(job: Job<FacebookLeadJobData>): Prom
   // 6. Create a new conversation
   const conversation = await prisma.conversation.create({
     data: {
+      id: crypto.randomUUID(),
       tenantId: tenant.id,
       contactId: contact.id,
       status: 'active',

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../config/database';
@@ -39,6 +40,7 @@ export class AuthService {
 
     const user = await prisma.tenantUser.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId: input.tenantId,
         email: input.email,
         passwordHash,

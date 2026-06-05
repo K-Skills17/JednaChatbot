@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { normalizeBrazilianPhone } from '../../utils/phone.utils';
@@ -9,6 +10,7 @@ export class CampaignService {
   async create(tenantId: string, input: CreateCampaignInput) {
     const campaign = await prisma.campaign.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId,
         name: input.name,
         messageTemplate: input.messageTemplate,
@@ -64,7 +66,7 @@ export class CampaignService {
         const contact = await prisma.contact.upsert({
           where: { tenantId_phone: { tenantId, phone } },
           update: {},
-          create: { tenantId, phone, leadStatus: 'new' },
+          create: { id: crypto.randomUUID(), tenantId, phone, leadStatus: 'new' },
         });
         contactIds.push(contact.id);
       }
@@ -105,6 +107,7 @@ export class CampaignService {
     if (newIds.length > 0) {
       await prisma.campaignContact.createMany({
         data: newIds.map((contactId) => ({
+          id: crypto.randomUUID(),
           campaignId,
           contactId,
           status: 'pending',

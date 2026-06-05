@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { formatDatePtBr } from '../../utils/timezone.utils';
@@ -41,6 +42,7 @@ export class BookingService {
     // Create booking record
     const booking = await prisma.booking.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId: input.tenantId,
         contactId: input.contactId,
         scheduledAt: input.scheduledAt,

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 
@@ -18,6 +19,7 @@ export class ReviewService {
 
     const review = await prisma.review.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId,
         contactId,
         bookingId: bookingId ?? null,

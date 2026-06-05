@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Job } from 'bullmq';
 import axios from 'axios';
 import nodemailer from 'nodemailer';
@@ -68,11 +69,11 @@ async function sendWhatsAppNotification(
     const contact = await prisma.contact.upsert({
       where: { tenantId_phone: { tenantId, phone } },
       update: {},
-      create: { tenantId, phone, name: 'Business Owner', leadStatus: 'new' },
+      create: { id: crypto.randomUUID(), tenantId, phone, name: 'Business Owner', leadStatus: 'new' },
     });
 
     conversation = await prisma.conversation.create({
-      data: { tenantId, contactId: contact.id, status: 'active' },
+      data: { id: crypto.randomUUID(), tenantId, contactId: contact.id, status: 'active' },
     });
   }
 

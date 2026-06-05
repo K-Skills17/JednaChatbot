@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
@@ -50,6 +51,7 @@ export function registerLeadIntakeRoutes(app: FastifyInstance): void {
           where: { tenantId_phone: { tenantId: tenant.id, phone: normalizedPhone } },
           update: { lastContactAt: new Date(), name: name ?? undefined },
           create: {
+            id: crypto.randomUUID(),
             tenantId: tenant.id,
             phone: normalizedPhone,
             name: name ?? null,
@@ -61,6 +63,7 @@ export function registerLeadIntakeRoutes(app: FastifyInstance): void {
         // Log event
         await prisma.event.create({
           data: {
+            id: crypto.randomUUID(),
             tenantId: tenant.id,
             leadId: contact.id,
             type: 'lead_in',

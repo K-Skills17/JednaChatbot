@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
@@ -98,6 +99,7 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
           qualificationData: auditData ? { audit: auditData } : undefined,
         },
         create: {
+          id: crypto.randomUUID(),
           tenantId: tenant.id,
           phone: normalizedPhone,
           name: name ?? null,
@@ -115,6 +117,7 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
       // Create new conversation with audit context
       const conversation = await prisma.conversation.create({
         data: {
+          id: crypto.randomUUID(),
           tenantId: tenant.id,
           contactId: contact.id,
           status: 'active',

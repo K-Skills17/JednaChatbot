@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
 import { getNotificationQueue } from '../../jobs/queue.setup';
@@ -18,6 +19,7 @@ export class NotificationService {
   async notify(input: NotifyInput): Promise<void> {
     const notification = await prisma.notification.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId: input.tenantId,
         type: input.type,
         channel: input.channel,

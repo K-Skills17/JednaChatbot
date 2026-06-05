@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../../config/database';
@@ -23,6 +24,7 @@ export class AdminService {
 
     const user = await prisma.adminUser.create({
       data: {
+        id: crypto.randomUUID(),
         email: input.email,
         passwordHash,
         name: input.name,
@@ -156,7 +158,7 @@ export class AdminService {
     details?: any;
     ipAddress?: string;
   }) {
-    await prisma.auditLog.create({ data: entry });
+    await prisma.auditLog.create({ data: { id: crypto.randomUUID(), ...entry } });
   }
 
   /** Get audit logs (paginated) */

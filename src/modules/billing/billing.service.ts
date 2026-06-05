@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import Stripe from 'stripe';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
@@ -172,6 +173,7 @@ export class BillingService {
     await prisma.subscription.upsert({
       where: { stripeSubscriptionId: sub.id },
       create: {
+        id: crypto.randomUUID(),
         tenantId,
         stripeSubscriptionId: sub.id,
         stripePriceId: priceId,
@@ -236,6 +238,7 @@ export class BillingService {
     await prisma.invoice.upsert({
       where: { stripeInvoiceId: invoice.id },
       create: {
+        id: crypto.randomUUID(),
         tenantId: tenant.id,
         stripeInvoiceId: invoice.id,
         amountDue: invoice.amount_due,

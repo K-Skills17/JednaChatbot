@@ -32,6 +32,7 @@ export class TenantService {
     const apiKey = `lk_${crypto.randomBytes(24).toString('hex')}`;
     const tenant = await prisma.tenant.create({
       data: {
+        id: crypto.randomUUID(),
         businessName: input.businessName,
         whatsappNumber: normalizedPhone,
         evolutionInstanceId: instanceName,

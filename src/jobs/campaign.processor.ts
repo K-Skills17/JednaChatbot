@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Job } from 'bullmq';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
@@ -71,6 +72,7 @@ export async function campaignProcessor(job: Job<CampaignSendJobData>): Promise<
   if (!conversation) {
     conversation = await prisma.conversation.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId,
         contactId,
         status: 'active',

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
@@ -135,6 +136,7 @@ export async function processWebMessage(
   // Save inbound message
   await prisma.message.create({
     data: {
+      id: crypto.randomUUID(),
       conversationId,
       tenantId,
       direction: 'inbound',
@@ -232,6 +234,7 @@ export async function processWebMessage(
   const costUsd = calculateAiCost(model, aiResponse.inputTokens, aiResponse.outputTokens);
   await prisma.message.create({
     data: {
+      id: crypto.randomUUID(),
       conversationId,
       tenantId,
       direction: 'outbound',

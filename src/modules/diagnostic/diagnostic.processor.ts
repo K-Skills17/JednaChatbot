@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Job } from 'bullmq';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
@@ -71,6 +72,7 @@ export async function diagnosticProcessor(job: Job<DiagnosticJobData>): Promise<
       },
     },
     create: {
+      id: crypto.randomUUID(),
       tenantId,
       phone: patientPhone,
       name: patientName,
@@ -105,6 +107,7 @@ export async function diagnosticProcessor(job: Job<DiagnosticJobData>): Promise<
   // 6. Create conversation with diagnostic context so AI knows the report was sent
   const conversation = await prisma.conversation.create({
     data: {
+      id: crypto.randomUUID(),
       tenantId,
       contactId: contact.id,
       status: 'active',

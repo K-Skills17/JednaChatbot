@@ -197,6 +197,7 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
         qualificationData,
       },
       create: {
+        id: crypto.randomUUID(),
         tenantId: tenant.id,
         phone,
         name,
@@ -216,6 +217,7 @@ export function registerFacebookWebhookRoutes(app: FastifyInstance): void {
     // 6. Create conversation
     const conversation = await prisma.conversation.create({
       data: {
+        id: crypto.randomUUID(),
         tenantId: tenant.id,
         contactId: contact.id,
         status: 'active',
