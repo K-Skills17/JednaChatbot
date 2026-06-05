@@ -41,8 +41,9 @@ export async function sendMessage(options: SendMessageOptions): Promise<void> {
       where: { id: conversationId },
       data: { lastMessageAt: new Date() },
     });
-  } catch (err) {
-    logger.error({ err, phone, tenantId }, 'Failed to send message');
+  } catch (err: any) {
+    const detail = err?.response?.data ?? err?.message ?? err;
+    logger.error({ detail, phone, instanceName, tenantId }, 'Failed to send message');
     throw err;
   }
 }
