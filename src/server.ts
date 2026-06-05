@@ -14,6 +14,7 @@ import {
   startDailySummaryScheduler,
   startDiagnosticWorker,
   startKeepaliveScheduler,
+  startConversationCleanupScheduler,
   stopAllWorkers,
 } from './jobs/queue.setup';
 import { logger } from './utils/logger';
@@ -56,6 +57,7 @@ async function main() {
         await startKeepaliveScheduler();
         await startReviewExpirationScheduler();
         await startDailySummaryScheduler();
+        await startConversationCleanupScheduler();
 
         logger.info('All workers started successfully');
       } catch (err) {

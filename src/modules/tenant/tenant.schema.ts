@@ -70,6 +70,11 @@ export const createTenantSchema = z.object({
     .optional(),
   plan: z.enum(['starter', 'pro', 'enterprise']).default('starter'),
   handoffNumber: z.string().optional(),
+  reviewConfig: z.object({
+    googleUrl: z.string().optional(),
+    facebookUrl: z.string().optional(),
+    delayHours: z.number().optional(),
+  }).optional(),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();

@@ -13,6 +13,7 @@ import { reviewRequestProcessor } from './review-request.processor';
 import { reviewExpirationProcessor } from './review-expiration.processor';
 import { diagnosticProcessor } from '../modules/diagnostic/diagnostic.processor';
 import { keepaliveProcessor } from './keepalive.processor';
+import { conversationCleanupProcessor } from './conversation-cleanup.processor';
 
 function getConnection() {
   return { connection: buildRedisOptions(env.REDIS_URL) };
@@ -398,6 +399,47 @@ export async function startDailySummaryScheduler(): Promise<void> {
 
   activeWorkers.push(worker);
   logger.info('Daily summary scheduler started (daily at 20:00 UTC)');
+}
+
+// ─── Conversation Cleanup Scheduler ──────────────────────────
+
+let _cleanupQueue: Queue | null = null;
+function getCleanupQueue(): Queue {
+  if (!_cleanupQueue) _cleanupQueue = new Queue('conversation-cleanup', getConnection());
+  return _cleanupQueue;
+}
+
+export async function startConversationCleanupScheduler(): Promise<void> {
+  await getCleanupQueue().add(
+    'cleanup-tick',
+    {},
+    {
+      repeat: { pattern: '0 */1 * * *' }, // Every hour
+      removeOnComplete: 10,
+      removeOnFail: 50,
+    },
+  );
+
+  const worker = new Worker(
+    'conversation-cleanup',
+    conversationCleanupProcessor,
+    getConnection(),
+  );
+
+  worker.on('completed', (job) => {
+    logger.debug({ jobId: job.id }, 'Conversation cleanup tick completed');
+  });
+
+  worker.on('failed', (job, err) => {
+    logger.error({ jobId: job?.id, err: err.message }, 'Conversation cleanup tick failed');
+  });
+
+  worker.on('error', (err) => {
+    logger.error({ err }, 'Conversation cleanup worker error');
+  });
+
+  activeWorkers.push(worker);
+  logger.info('Conversation cleanup scheduler started (every hour, closes after 48h idle)');
 }
 
 /** Gracefully stop all workers, waiting for in-flight jobs to finish */

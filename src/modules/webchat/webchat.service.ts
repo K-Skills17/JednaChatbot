@@ -13,6 +13,7 @@ import {
   ModelTier,
 } from '../../ai/ai.types';
 import { buildQualificationPrompt } from '../../ai/prompts/qualification.prompt';
+import { parseEnvelope } from '../../concierge/envelope';
 import { v4 as uuid } from 'uuid';
 
 const DEFAULT_CONTEXT: ConversationContext = {
@@ -193,36 +194,49 @@ export async function processWebMessage(
     temperature: aiConfig.temperature ?? 0.7,
   });
 
-  // Parse AI response
-  const action = parseAiResponse(aiResponse.text);
+  // Parse AI response via concierge envelope (same as WhatsApp engine)
+  const envelope = parseEnvelope(aiResponse.text);
+  const replyText = envelope.reply;
+
+  // Map envelope to AiAction for side effects
+  const aiAction: AiAction = {
+    replyText,
+    nextState: envelope.stage as any,
+    extractedData: envelope.qualification as any,
+    leadScore: undefined,
+    leadStatus: undefined,
+    shouldEscalate: envelope.action === 'encaminhar',
+    bookingDate: envelope.bookingDate,
+    bookingTime: envelope.bookingTime,
+  };
 
   // Qualification evaluation if needed
-  if (action.nextState === 'qualified' && !context.qualificationComplete) {
+  if (aiAction.nextState === 'qualified' && !context.qualificationComplete) {
     const qualResult = await runQualificationEvaluation(tenant, contact, context, history, providerName);
     if (qualResult) {
-      action.leadScore = qualResult.leadScore;
-      action.leadStatus = qualResult.leadStatus as any;
-      action.qualificationReasoning = qualResult.reasoning;
+      aiAction.leadScore = qualResult.leadScore;
+      aiAction.leadStatus = qualResult.leadStatus as any;
+      aiAction.qualificationReasoning = qualResult.reasoning;
     }
   }
 
   // Create booking if AI confirmed a date/time
-  if (action.bookingDate && action.bookingTime && action.nextState === 'closed') {
+  const action = envelope.action;
+  if (action === 'agendar' && envelope.bookingDate && envelope.bookingTime) {
     try {
-      const scheduledAt = parseBookingDateTime(action.bookingDate, action.bookingTime, tenant.timezone);
+      const scheduledAt = parseBookingDateTime(envelope.bookingDate, envelope.bookingTime, tenant.timezone);
       if (scheduledAt) {
         const booking = await bookingService.create({
           tenantId,
           contactId,
           scheduledAt,
           appointmentType: context.extractedData?.appointmentType ?? undefined,
-          notes: `Agendado via chat do site. ${context.extractedData?.notes ?? ''}`.trim(),
+          notes: `Agendado via chat do site. ${envelope.handoff_summary ?? ''}`.trim(),
         });
-        action.leadStatus = 'booked';
+        aiAction.leadStatus = 'booked';
 
-        // If the booking has a meet link, append it to the reply
-        if (booking.meetLink && !action.replyText.includes(booking.meetLink)) {
-          action.replyText += `\n\nLink da reunião: ${booking.meetLink}`;
+        if (booking.meetLink && !replyText.includes(booking.meetLink)) {
+          aiAction.replyText += `\n\nLink da reunião: ${booking.meetLink}`;
         }
       }
     } catch (err) {
@@ -239,7 +253,7 @@ export async function processWebMessage(
       tenantId,
       direction: 'outbound',
       messageType: 'text',
-      content: action.replyText,
+      content: aiAction.replyText,
       aiModelUsed: model,
       aiTokensUsed: aiResponse.totalTokens,
       aiCostUsd: costUsd,
@@ -248,18 +262,18 @@ export async function processWebMessage(
   });
 
   // Apply side effects (update context, contact, notifications)
-  await applySideEffects(tenantId, conversationId, contactId, context, action);
+  await applySideEffects(tenantId, conversationId, contactId, context, aiAction);
 
   // Track cost
   await trackTenantAiCost(tenantId, costUsd);
 
   logger.info(
-    { conversationId, model, tokens: aiResponse.totalTokens, state: action.nextState ?? context.state },
+    { conversationId, model, tokens: aiResponse.totalTokens, state: aiAction.nextState ?? context.state, action },
     'Web chat message processed',
   );
 
   return {
-    reply: action.replyText,
+    reply: aiAction.replyText,
     sessionId: conversationId,
   };
 }
