@@ -1,7 +1,6 @@
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import crypto from 'crypto';
 import { env } from './env';
 
 // Lazy singleton — PrismaClient is only created when first accessed,
@@ -9,17 +8,9 @@ import { env } from './env';
 // even when DATABASE_URL is not configured.
 
 let _prisma: PrismaClient | null = null;
-let _extended: any = null;
 
-/** Replace Prisma-generated UUIDs that contain colons (adapter-pg bug) */
-function fixId(data: Record<string, any>): void {
-  if (!data.id || (typeof data.id === 'string' && data.id.includes(':'))) {
-    data.id = crypto.randomUUID();
-  }
-}
-
-function getPrisma(): any {
-  if (!_extended) {
+function getPrisma(): PrismaClient {
+  if (!_prisma) {
     if (!env.DATABASE_URL) {
       throw new Error('DATABASE_URL is not configured');
     }
@@ -28,39 +19,9 @@ function getPrisma(): any {
     const url = `${env.DATABASE_URL}${sep}schema=lk_chatbot`;
     const pool = new Pool({ connectionString: url });
     const adapter = new PrismaPg(pool, { schema: 'lk_chatbot' });
-    _prisma = new PrismaClient({ adapter });
-
-    // Prisma 7 + adapter-pg generates client-side UUIDs with colons.
-    // The @default(uuid()) is applied BEFORE extension hooks run, so
-    // args.data.id is already set to a bad UUID. We must detect and replace it.
-    _extended = (_prisma as any).$extends({
-      query: {
-        $allModels: {
-          async create({ args, query }: any) {
-            if (args.data) {
-              fixId(args.data);
-            }
-            return query(args);
-          },
-          async createMany({ args, query }: any) {
-            if (Array.isArray(args.data)) {
-              for (const item of args.data) {
-                fixId(item);
-              }
-            }
-            return query(args);
-          },
-          async upsert({ args, query }: any) {
-            if (args.create) {
-              fixId(args.create);
-            }
-            return query(args);
-          },
-        },
-      },
-    });
+    _prisma = new PrismaClient({ adapter }) as any;
   }
-  return _extended;
+  return _prisma!;
 }
 
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
@@ -70,7 +31,7 @@ export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
 });
 
 export async function connectDatabase(): Promise<void> {
-  await getPrisma().$queryRawUnsafe('SELECT 1');
+  await (getPrisma() as any).$queryRawUnsafe('SELECT 1');
   console.log('Database connected');
 }
 
