@@ -40,23 +40,36 @@ async function main() {
 
   // Then connect DB and start workers (non-fatal — server stays up)
   if (env.DATABASE_URL && env.REDIS_URL) {
-    try {
-      await connectDatabase();
+    const connectAndStartWorkers = async (attempt = 1): Promise<void> => {
+      try {
+        await connectDatabase();
+        logger.info('Database connected — starting workers');
 
-      startMessageWorker();
-      startReminderWorker();
-      startCampaignWorker();
-      await startCampaignScheduler();
-      startNotificationWorker();
-      startFacebookLeadWorker();
-      startReviewWorker();
-      startDiagnosticWorker();
-      await startKeepaliveScheduler();
-      await startReviewExpirationScheduler();
-      await startDailySummaryScheduler();
-    } catch (err) {
-      logger.error({ err }, 'Failed to connect services — server running without workers');
-    }
+        startMessageWorker();
+        startReminderWorker();
+        startCampaignWorker();
+        await startCampaignScheduler();
+        startNotificationWorker();
+        startFacebookLeadWorker();
+        startReviewWorker();
+        startDiagnosticWorker();
+        await startKeepaliveScheduler();
+        await startReviewExpirationScheduler();
+        await startDailySummaryScheduler();
+
+        logger.info('All workers started successfully');
+      } catch (err) {
+        if (attempt < 5) {
+          const delayMs = attempt * 5000;
+          logger.warn({ err, attempt, retryInMs: delayMs }, `DB connection attempt ${attempt} failed — retrying`);
+          await new Promise(r => setTimeout(r, delayMs));
+          return connectAndStartWorkers(attempt + 1);
+        }
+        logger.error({ err }, 'Failed to connect after 5 attempts — server running without workers');
+      }
+    };
+    // Run in background so health check responds immediately
+    connectAndStartWorkers().catch(() => {});
   } else {
     logger.warn('DATABASE_URL or REDIS_URL not set — running in health-check-only mode');
   }

@@ -246,6 +246,8 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     delay: DEBOUNCE_MS,
     attempts: 3,
     backoff: { type: 'exponential', delay: 2000 },
+    removeOnComplete: true,
+    removeOnFail: 100,
   });
 
   logger.info(
