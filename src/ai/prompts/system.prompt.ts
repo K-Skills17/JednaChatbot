@@ -170,10 +170,27 @@ function buildSalesFramework(aiConfig: TenantData['aiConfig']): string {
 
 function buildBusinessContext(tenant: TenantData): string {
   const dayNames = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const dayNamesFull = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
   const workDays = tenant.businessHours.days.map((d) => dayNames[d]).join(', ');
+
+  // Current date/time in tenant's timezone
+  const now = new Date();
+  const formatted = now.toLocaleDateString('pt-BR', {
+    timeZone: tenant.timezone,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const timeNow = now.toLocaleTimeString('pt-BR', {
+    timeZone: tenant.timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   const lines = [
     '## Contexto do Negócio',
+    `- **Data e hora atual: ${formatted}, ${timeNow}** (USE ESTA DATA para calcular datas futuras — NUNCA invente datas)`,
     `- Empresa: ${tenant.businessName}`,
     `- Horário de funcionamento: ${tenant.businessHours.start} às ${tenant.businessHours.end} (${workDays})`,
     `- Fuso horário: ${tenant.timezone}`,
