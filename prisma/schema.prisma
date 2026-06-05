@@ -10,7 +10,7 @@ datasource db {
 // ─── Multi-Tenant ────────────────────────────────────────────
 
 model Tenant {
-  id                  String   @id
+  id                  String   @id @default(uuid())
   businessName        String   @map("business_name")
   whatsappNumber      String?  @unique @map("whatsapp_number")
   evolutionInstanceId String?  @map("evolution_instance_id")
@@ -59,7 +59,7 @@ model Tenant {
 // ─── Tenant Users (Portal Auth) ─────────────────────────────
 
 model TenantUser {
-  id           String    @id
+  id           String    @id @default(uuid())
   tenantId     String    @map("tenant_id")
   email        String    @unique
   passwordHash String    @map("password_hash")
@@ -78,7 +78,7 @@ model TenantUser {
 // ─── Admin Users (Platform Admins) ──────────────────────────
 
 model AdminUser {
-  id           String    @id
+  id           String    @id @default(uuid())
   email        String    @unique
   passwordHash String    @map("password_hash")
   name         String
@@ -95,7 +95,7 @@ model AdminUser {
 // ─── Audit Log ──────────────────────────────────────────────
 
 model AuditLog {
-  id          String   @id
+  id          String   @id @default(uuid())
   adminUserId String?  @map("admin_user_id")
   action      String   // tenant.create, tenant.delete, tenant.update, admin.login, etc.
   entityType  String?  @map("entity_type") // tenant, campaign, booking, admin_user
@@ -115,7 +115,7 @@ model AuditLog {
 // ─── Contacts / Leads ────────────────────────────────────────
 
 model Contact {
-  id                String    @id
+  id                String    @id @default(uuid())
   tenantId          String    @map("tenant_id")
   phone             String
   name              String?
@@ -146,7 +146,7 @@ model Contact {
 // ─── Conversations ───────────────────────────────────────────
 
 model Conversation {
-  id            String    @id
+  id            String    @id @default(uuid())
   tenantId      String    @map("tenant_id")
   contactId     String    @map("contact_id")
   channel       String    @default("whatsapp") // whatsapp, web
@@ -169,7 +169,7 @@ model Conversation {
 // ─── Messages ────────────────────────────────────────────────
 
 model Message {
-  id                 String   @id
+  id                 String   @id @default(uuid())
   conversationId     String   @map("conversation_id")
   tenantId           String   @map("tenant_id")
   direction          String   // inbound, outbound
@@ -196,7 +196,7 @@ model Message {
 // ─── Bookings ────────────────────────────────────────────────
 
 model Booking {
-  id              String   @id
+  id              String   @id @default(uuid())
   tenantId        String   @map("tenant_id")
   contactId       String   @map("contact_id")
   appointmentType String?  @map("appointment_type")
@@ -222,7 +222,7 @@ model Booking {
 // ─── Campaigns (Cold Outreach) ───────────────────────────────
 
 model Campaign {
-  id              String    @id
+  id              String    @id @default(uuid())
   tenantId        String    @map("tenant_id")
   name            String
   status          String    @default("draft") // draft, active, paused, completed
@@ -244,7 +244,7 @@ model Campaign {
 }
 
 model CampaignContact {
-  id         String    @id
+  id         String    @id @default(uuid())
   campaignId String    @map("campaign_id")
   contactId  String    @map("contact_id")
   status     String    @default("pending") // pending, sent, replied, opted_out, failed
@@ -260,7 +260,7 @@ model CampaignContact {
 // ─── Notifications ───────────────────────────────────────────
 
 model Notification {
-  id        String    @id
+  id        String    @id @default(uuid())
   tenantId  String    @map("tenant_id")
   type      String    // new_lead, booking, escalation, daily_summary
   channel   String    // whatsapp, email, webhook
@@ -279,7 +279,7 @@ model Notification {
 // ─── Subscriptions (Stripe) ─────────────────────────────────
 
 model Subscription {
-  id                   String    @id
+  id                   String    @id @default(uuid())
   tenantId             String    @map("tenant_id")
   stripeSubscriptionId String    @unique @map("stripe_subscription_id")
   stripePriceId        String    @map("stripe_price_id")
@@ -301,7 +301,7 @@ model Subscription {
 // ─── Invoices (Stripe) ──────────────────────────────────────
 
 model Invoice {
-  id               String    @id
+  id               String    @id @default(uuid())
   tenantId         String    @map("tenant_id")
   stripeInvoiceId  String    @unique @map("stripe_invoice_id")
   amountDue        Int       @map("amount_due")       // in cents
@@ -324,7 +324,7 @@ model Invoice {
 // ─── Reviews (Post-appointment) ─────────────────────────────
 
 model Review {
-  id              String    @id
+  id              String    @id @default(uuid())
   tenantId        String    @map("tenant_id")
   contactId       String    @map("contact_id")
   bookingId       String?   @map("booking_id")
@@ -347,7 +347,7 @@ model Review {
 // ─── Compliance Audit (CFO/CRO Gate) ──────────────────────────
 
 model ComplianceAudit {
-  id             String   @id
+  id             String   @id @default(uuid())
   messageId      String?  @map("message_id")
   conversationId String   @map("conversation_id")
   tenantId       String   @map("tenant_id")
@@ -369,7 +369,7 @@ model ComplianceAudit {
 // ─── Handoffs (Escalation to Human Staff) ─────────────────────
 
 model Handoff {
-  id             String   @id
+  id             String   @id @default(uuid())
   leadId         String   @map("lead_id")
   conversationId String   @map("conversation_id")
   tenantId       String   @map("tenant_id")
@@ -389,7 +389,7 @@ model Handoff {
 // ─── Events (Event Sourcing / Activity Log) ───────────────────
 
 model Event {
-  id        String   @id
+  id        String   @id @default(uuid())
   leadId    String?  @map("lead_id")
   tenantId  String   @map("tenant_id")
   type      String   // message_in, lead_in, message_out, agendar, encaminhar, desqualificar, opt_out, continuar
