@@ -203,6 +203,68 @@ export async function buildApp() {
     return reply.send({ apiKey: env.API_KEY });
   });
 
+  // ─── Google Calendar OAuth (public — no auth) ────────────────
+  app.get('/api/calendar/connect/:tenantId', async (request: any, reply: any) => {
+    const { tenantId } = request.params;
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REDIRECT_URI) {
+      return reply.code(400).send({ error: 'Google Calendar not configured' });
+    }
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) return reply.code(404).send({ error: 'Tenant not found' });
+
+    const redirectUri = env.GOOGLE_REDIRECT_URI.startsWith('http')
+      ? env.GOOGLE_REDIRECT_URI
+      : `https://${env.GOOGLE_REDIRECT_URI}`;
+
+    const google = require('googleapis').google;
+    const oauth2 = new google.auth.OAuth2(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, redirectUri);
+    const authUrl = oauth2.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar'],
+      state: tenantId,
+      prompt: 'consent',
+    });
+    return reply.redirect(authUrl);
+  });
+
+  app.get('/api/calendar/callback', async (request: any, reply: any) => {
+    const { code, state: tenantId, error: oauthError } = request.query;
+    if (oauthError) return reply.code(400).send({ error: `OAuth error: ${oauthError}` });
+    if (!code || !tenantId) return reply.code(400).send({ error: 'Missing code or state' });
+
+    const redirectUri = env.GOOGLE_REDIRECT_URI!.startsWith('http')
+      ? env.GOOGLE_REDIRECT_URI!
+      : `https://${env.GOOGLE_REDIRECT_URI}`;
+
+    const google = require('googleapis').google;
+    const oauth2 = new google.auth.OAuth2(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, redirectUri);
+    try {
+      const { tokens } = await oauth2.getToken(code);
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      if (!tenant) return reply.code(404).send({ error: 'Tenant not found' });
+
+      const existing = (tenant.bookingConfig as Record<string, any>) ?? {};
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          bookingConfig: {
+            ...existing,
+            googleCalendar: {
+              accessToken: tokens.access_token,
+              refreshToken: tokens.refresh_token,
+              calendarId: 'primary',
+            },
+          },
+        },
+      });
+      return reply.type('text/html').send(
+        '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h1>✅ Google Calendar conectado!</h1><p>Você pode fechar esta janela.</p></body></html>'
+      );
+    } catch (err: any) {
+      return reply.code(500).send({ error: 'Failed to exchange token', detail: err?.message });
+    }
+  });
+
   // ─── Routes (each wrapped in register() for hook encapsulation) ───
 
   app.register(async (instance) => registerWebhookRoutes(instance));
