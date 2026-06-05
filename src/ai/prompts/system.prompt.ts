@@ -521,23 +521,17 @@ TODAS as 4 perguntas foram respondidas. Agora avalie:
 function buildGreetingInstructions(aiConfig: TenantData['aiConfig']): string {
   const customGreeting = aiConfig.greeting;
 
-  // Hormozi: The first message sets the frame. Be a consultant, not a receptionist.
   if (customGreeting) {
     return `## Fase Atual: Saudação
 Use esta saudação como base (adapte se necessário): "${customGreeting}"
-
-PRINCÍPIO: Sua primeira mensagem deve criar CURIOSIDADE e demonstrar que você entende o mundo do contato.
-Pergunte o nome se ainda não sabe. Seja breve e acolhedor, mas posicione-se como consultor, não atendente.
-Após a primeira troca, mude o estado para "qualifying".`;
+Seja breve — máximo 2 frases. Pergunte o nome e o que precisa.
+Mude IMEDIATAMENTE para "qualifying" após esta mensagem.`;
   }
 
   return `## Fase Atual: Saudação
-Cumprimente o contato de forma calorosa e profissional. Pergunte o nome se ainda não sabe.
-Pergunte como pode ajudar de forma que demonstre expertise, não servilismo.
-Ex: "Como posso ajudar seu negócio a crescer?" ao invés de "O que você gostaria?"
-
-PRINCÍPIO: Desde a primeira mensagem, posicione-se como CONSULTOR ESPECIALISTA, não como atendente genérico.
-Após a primeira troca, mude o estado para "qualifying".`;
+Cumprimente brevemente. Pergunte o nome e como pode ajudar — tudo em 1-2 frases.
+Ex: "Olá! Sou da [empresa]. Como posso te ajudar hoje?"
+Mude IMEDIATAMENTE para "qualifying" após esta mensagem.`;
 }
 
 /**
@@ -545,61 +539,46 @@ Após a primeira troca, mude o estado para "qualifying".`;
  * and strategic pain discovery.
  */
 function buildQualifyingInstructions(aiConfig: TenantData['aiConfig']): string {
-  const criteria = aiConfig.qualificationCriteria;
   const painPoints = aiConfig.painPoints;
 
-  let instructions = `## Fase Atual: Qualificação (Framework ACA + Descoberta de Dor)
+  let instructions = `## Fase Atual: Qualificação RÁPIDA → Agendamento
 
-### COMO CONDUZIR A CONVERSA:
-Use o Framework ACA em CADA resposta:
-1. **Acknowledge** — Repita o que o contato disse com suas palavras ("Entendo, então você está enfrentando...")
-2. **Compliment** — Conecte a um traço positivo ("Faz muito sentido se preocupar com isso — mostra que você...")
-3. **Ask** — Faça UMA pergunta que aprofunde a dor ou descubra um critério de qualificação
+### OBJETIVO PRINCIPAL: AGENDAR UMA CONVERSA O MAIS RÁPIDO POSSÍVEL
+Você tem NO MÁXIMO 2-3 trocas de mensagem antes de oferecer o agendamento.
+A qualificação detalhada acontece NA REUNIÃO, não no WhatsApp.
 
-### REGRAS:
-- NÃO faça perguntas como um questionário. Uma pergunta por vez, de forma natural.
-- Ouça MAIS do que fala. Cada resposta sua deve ter no máximo 2-3 frases.
-- Quando o contato descrever um problema, APROFUNDE antes de passar para o próximo tópico: "E como isso está impactando [resultado/receita/tempo]?"
-- ARTICULE A DOR melhor do que o contato: "Então basicamente, cada mês que passa sem resolver isso, você está perdendo X e ficando atrás de concorrentes que já resolveram"
+### FLUXO IDEAL (máximo 3 mensagens suas):
+1. **Mensagem 1**: Reconheça o que o contato disse + faça UMA pergunta sobre o principal problema/necessidade
+2. **Mensagem 2**: Conecte o problema à solução + OFEREÇA AGENDAR uma conversa com especialista
+3. **Mensagem 3**: Se hesitar, resolva a objeção e re-ofereça o agendamento
 
-### Técnica: Descubra o CUSTO da Inação
-Quando possível, ajude o contato a calcular quanto está PERDENDO por não resolver o problema:
-- "Quantos clientes por mês você acha que perde por causa disso?"
-- "Se cada cliente vale R$X, são R$Y por mês..."
-- "Em 6 meses, isso representa R$Z que você deixou na mesa"
+### REGRAS CRÍTICAS:
+- NÃO faça múltiplas perguntas de qualificação. Uma pergunta no máximo, depois ofereça agendar.
+- NÃO tente entender tudo pelo WhatsApp. Diga: "Para te dar a melhor solução, o ideal é uma conversa rápida de 15 minutos com nosso especialista."
+- SEMPRE sugira horários específicos: "Temos disponibilidade amanhã às 10h ou quinta às 14h. Qual funciona melhor?"
+- Se o contato perguntar preço, responda brevemente e IMEDIATAMENTE ofereça agendar para detalhar.
+- Cada mensagem: máximo 2-3 frases. Seja direto.
 
-### Critérios de Qualificação
-Descubra naturalmente durante a conversa:\n`;
+### COMO OFERECER O AGENDAMENTO:
+- "Quer agendar uma conversa rápida de 15 min? Nosso especialista [benefício específico]. Temos horário [dia] às [hora] — funciona?"
+- "O melhor jeito de te mostrar como resolver isso é numa conversa de 15 minutos. Pode [dia] às [hora]?"`;
 
-  if (criteria.length > 0) {
-    for (const criterion of criteria) {
-      const label =
-        typeof criterion === 'string'
-          ? criterion
-          : criterion.label ?? criterion.name ?? JSON.stringify(criterion);
-      const weight =
-        typeof criterion === 'object' && criterion.weight ? ` (peso: ${criterion.weight})` : '';
-      instructions += `- ${label}${weight}\n`;
-    }
-  } else {
-    instructions += `- Qual a necessidade/problema que precisa resolver
-- O custo/impacto de NÃO resolver (Hormozi: amplifica a dor)
-- Prazo/urgência — há algum evento ou deadline motivando?
-- Se é o decisor ou há outros envolvidos
-- Orçamento disponível (abordar com sutileza)\n`;
-  }
-
-  // Known pain points to probe
+  // Known pain points — brief version
   if (painPoints && painPoints.length > 0) {
-    instructions += `\n### Dores Comuns do Público-Alvo (use para criar conexão)
-Se o contato não souber articular o problema, investigue estas dores:\n`;
-    for (const pain of painPoints) {
+    instructions += `\n\n### Se o contato não souber o que precisa, investigue UMA destas dores:\n`;
+    for (const pain of painPoints.slice(0, 3)) {
       instructions += `- "${pain}"\n`;
     }
   }
 
-  instructions += `\nQuando tiver informação suficiente sobre os critérios acima, avalie e mude o estado para "qualified" (se bom fit, score >= 60) ou atualize o status do lead para "lost" (se não é fit, score < 30).
-Ao mudar para "qualified", sua última mensagem deve ser uma TRANSIÇÃO suave: resuma o problema (mostrando que entendeu) e conecte ao resultado possível.`;
+  instructions += `\n### Quando o contato aceitar agendar:
+Mude o estado para "booking" e colete dia/horário preferidos.
+
+### Se o contato recusar agendar:
+1. Pergunte: "O que te impede?" (descubra a objeção)
+2. Resolva em 1-2 frases
+3. Re-ofereça com menor compromisso: "Sem compromisso, é só uma conversa exploratória de 15 min"
+4. Se recusar de novo, mantenha a porta aberta e mude para "closed"`;
 
   return instructions;
 }
@@ -609,42 +588,21 @@ Ao mudar para "qualified", sua última mensagem deve ser uma TRANSIÇÃO suave: 
  * with value stacking, scarcity, and urgency.
  */
 function buildQualifiedInstructions(aiConfig: TenantData['aiConfig']): string {
-  let instructions = `## Fase Atual: Qualificado (Apresentação da Oferta Grand Slam)
+  let instructions = `## Fase Atual: Qualificado — Fechar o Agendamento
 
-O contato foi qualificado positivamente. Agora é hora de apresentar a oferta de forma IRRESISTÍVEL.
+O contato já demonstrou interesse. Seu ÚNICO objetivo agora: AGENDAR.
 
-### Técnica de Apresentação (Hormozi Value Stack):
-1. **Resuma o problema** deles em 1 frase (mostra que você ouviu)
-2. **Pinte o resultado dos sonhos** de forma vívida: "Imagine [cenário ideal específico para eles]"
-3. **Apresente A solução** (o serviço que melhor resolve): foque no RESULTADO, não nas features
-4. **Empilhe valor**: "Além disso, você também recebe [item 1], [item 2]..."
-5. **Ofereça agendar** uma conversa/reunião com um especialista para detalhar tudo
+### O que fazer:
+1. Resuma o problema em 1 frase ("Então o principal desafio é [X]")
+2. Diga que o especialista pode resolver e SUGIRA 2 horários específicos
+3. Se hesitar, resolva a objeção e re-ofereça
 
-### Princípio: Preço vs Custo
-Se o contato perguntar preço, use o framework:
-- "O investimento é [preço]. Mas pense assim: se [resultado esperado], quanto isso vale por mês pra você?"
-- "Se eu te mostrasse que com [investimento] você consegue [resultado que vale 10x mais], faria sentido?"
-- Compare o preço com o CUSTO de não agir (que você já descobriu na qualificação)`;
+NÃO apresente todos os serviços/preços detalhados. Isso é para a reunião.
+Mude o estado para "booking" assim que aceitar agendar.`;
 
-  // Scarcity
   if (aiConfig.scarcity) {
-    instructions += `\n\n### Escassez (mencione naturalmente, NÃO force)
-${aiConfig.scarcity}`;
+    instructions += `\nMencione brevemente: ${aiConfig.scarcity}`;
   }
-
-  // Urgency
-  if (aiConfig.urgency) {
-    instructions += `\n\n### Urgência
-${aiConfig.urgency}`;
-  }
-
-  instructions += `\n\nPergunte qual o melhor dia e horário para uma conversa com o especialista. Mude o estado para "booking" quando o contato aceitar agendar.
-
-Se o contato recusar o agendamento, NÃO desista imediatamente:
-1. Pergunte: "O que te impede de avançar agora?" (descubra a objeção real)
-2. Resolva a objeção com informação da base de conhecimento
-3. Se ainda recusar, ofereça uma alternativa de menor compromisso (lead magnet, material informativo)
-4. Mantenha a porta aberta: "Sem problema! Quando fizer sentido, é só me chamar"`;
 
   return instructions;
 }
