@@ -39,4 +39,5 @@ ENV NODE_ENV=production
 EXPOSE 3000
 # Start server FIRST so Railway health check responds immediately.
 # prisma db push runs in the background with a 60s timeout — best-effort.
-CMD ["sh", "-c", "(timeout 60 npx prisma db push --accept-data-loss --config prisma.config.mjs 2>&1 && echo 'prisma db push succeeded' || echo 'prisma db push skipped') & exec node dist/server.js"]
+# Uses --schema flag directly (Prisma 6 compatible, no config file needed).
+CMD ["sh", "-c", "(timeout 60 npx prisma db push --accept-data-loss --schema prisma/schema.prisma 2>&1 && echo 'prisma db push succeeded' || echo 'prisma db push skipped') & exec node dist/server.js"]
