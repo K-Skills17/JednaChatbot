@@ -101,11 +101,17 @@ export async function buildApp() {
 
   // ─── Health Check ─────────────────────────────────────────
 
-  app.get('/health', async () => ({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-  }));
+  app.get('/health', async () => {
+    let prismaVersion = 'unknown';
+    try { prismaVersion = require('@prisma/client').Prisma.prismaVersion.client; } catch {}
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      prismaVersion,
+      commitSha: process.env.RAILWAY_GIT_COMMIT_SHA ?? 'local',
+    };
+  });
 
   app.get('/health/ready', async (_request, reply) => {
     const checks: Record<string, string> = {};
