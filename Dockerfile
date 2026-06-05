@@ -9,6 +9,8 @@ RUN npm run build
 # ─── Stage 2: Build server (TypeScript) ───────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
+# Install OpenSSL for Prisma 6 native engine
+RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm ci
 COPY tsconfig.json ./
@@ -17,10 +19,15 @@ COPY prisma ./prisma/
 COPY src ./src/
 RUN npx prisma generate
 RUN npx tsc
+# Copy Prisma engine binaries that tsc doesn't handle
+RUN cp src/generated/prisma/*.node dist/generated/prisma/ 2>/dev/null || true
+RUN cp src/generated/prisma/schema.prisma dist/generated/prisma/ 2>/dev/null || true
 
 # ─── Stage 3: Production runtime ─────────────────────────────
 FROM node:20-alpine
 WORKDIR /app
+# Install OpenSSL for Prisma 6 native engine
+RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
