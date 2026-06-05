@@ -9,9 +9,10 @@ import { env } from './env';
 // even when DATABASE_URL is not configured.
 
 let _prisma: PrismaClient | null = null;
+let _extended: any = null;
 
-function getPrisma(): PrismaClient {
-  if (!_prisma) {
+function getPrisma(): any {
+  if (!_extended) {
     if (!env.DATABASE_URL) {
       throw new Error('DATABASE_URL is not configured');
     }
@@ -20,30 +21,39 @@ function getPrisma(): PrismaClient {
     const url = `${env.DATABASE_URL}${sep}schema=lk_chatbot`;
     const pool = new Pool({ connectionString: url });
     const adapter = new PrismaPg(pool, { schema: 'lk_chatbot' });
-    const base = new PrismaClient({ adapter });
+    _prisma = new PrismaClient({ adapter });
 
     // Prisma 7 + adapter-pg generates client-side UUIDs with colons.
-    // This extension generates proper UUIDs before every create/upsert.
-    _prisma = base.$extends({
+    // This extension injects a proper UUID via crypto.randomUUID()
+    // before every create/upsert so Prisma never generates a bad one.
+    _extended = _prisma.$extends({
       query: {
         $allModels: {
-          async create({ args, query }) {
-            if (!args.data.id) {
-              (args.data as any).id = crypto.randomUUID();
+          create({ args, query }: any) {
+            if (args.data && !args.data.id) {
+              args.data.id = crypto.randomUUID();
             }
             return query(args);
           },
-          async upsert({ args, query }) {
-            if (!args.create.id) {
-              (args.create as any).id = crypto.randomUUID();
+          createMany({ args, query }: any) {
+            if (Array.isArray(args.data)) {
+              for (const item of args.data) {
+                if (!item.id) item.id = crypto.randomUUID();
+              }
+            }
+            return query(args);
+          },
+          upsert({ args, query }: any) {
+            if (args.create && !args.create.id) {
+              args.create.id = crypto.randomUUID();
             }
             return query(args);
           },
         },
       },
-    }) as unknown as PrismaClient;
+    });
   }
-  return _prisma;
+  return _extended;
 }
 
 export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
