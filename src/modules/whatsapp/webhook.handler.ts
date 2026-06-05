@@ -49,7 +49,12 @@ export function registerWebhookRoutes(app: FastifyInstance): void {
 
       switch (event) {
         case 'messages.upsert':
-          await handleIncomingMessage(instance, data);
+          try {
+            await handleIncomingMessage(instance, data);
+          } catch (err: any) {
+            logger.error({ err: err?.message, stack: err?.stack?.split('\n').slice(0, 5) }, 'handleIncomingMessage FAILED');
+            throw err;
+          }
           break;
 
         case 'messages.update':
@@ -95,27 +100,33 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
   const senderName = data.pushName ?? null;
 
   // Find the tenant by Evolution instance
+  logger.info('STEP 1: finding tenant...');
   const tenant = await prisma.tenant.findFirst({
     where: { evolutionInstanceId: instanceName, status: 'active' },
   });
+  logger.info({ tenantId: tenant?.id }, 'STEP 1 done');
 
   if (!tenant) {
     logger.warn({ instanceName }, 'Received message for unknown/inactive tenant');
     return;
   }
 
-  // Upsert contact — explicit UUID to work around Prisma 7 adapter-pg bug
+  // Upsert contact
+  logger.info('STEP 2: upserting contact...');
+  const contactId = crypto.randomUUID();
+  logger.info({ contactId }, 'STEP 2: generated UUID for contact');
   const contact = await prisma.contact.upsert({
     where: { tenantId_phone: { tenantId: tenant.id, phone } },
     update: { lastContactAt: new Date(), name: senderName ?? undefined },
     create: {
-      id: crypto.randomUUID(),
+      id: contactId,
       tenantId: tenant.id,
       phone,
       name: senderName,
       leadStatus: 'new',
     },
   });
+  logger.info({ contactId: contact.id }, 'STEP 2 done');
 
   // Track campaign replies (non-blocking)
   await trackCampaignReply(tenant.id, contact.id);
