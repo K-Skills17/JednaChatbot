@@ -1,6 +1,7 @@
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import crypto from 'crypto';
 import { env } from './env';
 
 // Lazy singleton — PrismaClient is only created when first accessed,
@@ -19,7 +20,28 @@ function getPrisma(): PrismaClient {
     const url = `${env.DATABASE_URL}${sep}schema=lk_chatbot`;
     const pool = new Pool({ connectionString: url });
     const adapter = new PrismaPg(pool, { schema: 'lk_chatbot' });
-    _prisma = new PrismaClient({ adapter });
+    const base = new PrismaClient({ adapter });
+
+    // Prisma 7 + adapter-pg generates client-side UUIDs with colons.
+    // This extension generates proper UUIDs before every create/upsert.
+    _prisma = base.$extends({
+      query: {
+        $allModels: {
+          async create({ args, query }) {
+            if (!args.data.id) {
+              (args.data as any).id = crypto.randomUUID();
+            }
+            return query(args);
+          },
+          async upsert({ args, query }) {
+            if (!args.create.id) {
+              (args.create as any).id = crypto.randomUUID();
+            }
+            return query(args);
+          },
+        },
+      },
+    }) as unknown as PrismaClient;
   }
   return _prisma;
 }
