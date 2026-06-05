@@ -69,6 +69,7 @@ export const createTenantSchema = z.object({
     })
     .optional(),
   plan: z.enum(['starter', 'pro', 'enterprise']).default('starter'),
+  handoffNumber: z.string().optional(),
 });
 
 export const updateTenantSchema = createTenantSchema.partial();
