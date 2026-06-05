@@ -188,9 +188,22 @@ function buildBusinessContext(tenant: TenantData): string {
     minute: '2-digit',
   });
 
+  // Pre-compute next 14 days so the AI never needs to calculate dates
+  const upcomingDays: string[] = [];
+  for (let i = 1; i <= 14; i++) {
+    const future = new Date(now.getTime() + i * 24 * 60 * 60 * 1000);
+    const dayName = future.toLocaleDateString('pt-BR', { timeZone: tenant.timezone, weekday: 'long' });
+    const dateStr = future.toLocaleDateString('pt-BR', { timeZone: tenant.timezone, day: '2-digit', month: '2-digit' });
+    const isWorkDay = tenant.businessHours.days.includes(future.getDay());
+    upcomingDays.push(`  ${dayName} ${dateStr}${isWorkDay ? ' ✓' : ' (fechado)'}`);
+  }
+
   const lines = [
     '## Contexto do Negócio',
-    `- **Data e hora atual: ${formatted}, ${timeNow}** (USE ESTA DATA para calcular datas futuras — NUNCA invente datas)`,
+    `- **HOJE: ${formatted}, ${timeNow}**`,
+    `- Próximos dias (✓ = dia útil):`,
+    ...upcomingDays,
+    `- **IMPORTANTE: Use APENAS as datas acima ao sugerir agendamentos. NUNCA calcule datas manualmente.**`,
     `- Empresa: ${tenant.businessName}`,
     `- Horário de funcionamento: ${tenant.businessHours.start} às ${tenant.businessHours.end} (${workDays})`,
     `- Fuso horário: ${tenant.timezone}`,
