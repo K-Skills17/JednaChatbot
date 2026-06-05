@@ -10,8 +10,77 @@ function getGoogle() {
   return require('googleapis').google as typeof import('googleapis').google;
 }
 
+/** Ensure redirect URI has https:// prefix */
+function normalizeRedirectUri(uri: string): string {
+  if (!uri) return uri;
+  if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
+    return `https://${uri}`;
+  }
+  return uri;
+}
+
 export function registerBookingRoutes(app: FastifyInstance): void {
-  // All booking routes require API key
+  // ─── Google Calendar OAuth callback (NO auth — Google redirects here) ───
+  app.get(
+    '/api/calendar/callback',
+    async (
+      request: FastifyRequest<{ Querystring: { code?: string; state?: string; error?: string } }>,
+      reply: FastifyReply,
+    ) => {
+      const { code, state: tenantId, error: oauthError } = request.query;
+
+      if (oauthError) {
+        return reply.code(400).send({ error: `OAuth error: ${oauthError}` });
+      }
+
+      if (!code || !tenantId) {
+        return reply.code(400).send({ error: 'Missing code or state parameter' });
+      }
+
+      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+        return reply.code(400).send({ error: 'Google Calendar not configured' });
+      }
+
+      const redirectUri = normalizeRedirectUri(env.GOOGLE_REDIRECT_URI ?? '');
+
+      const oauth2Client = new (getGoogle()).auth.OAuth2(
+        env.GOOGLE_CLIENT_ID,
+        env.GOOGLE_CLIENT_SECRET,
+        redirectUri,
+      );
+
+      try {
+        const { tokens } = await oauth2Client.getToken(code);
+
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+        if (!tenant) return reply.code(404).send({ error: 'Tenant not found' });
+
+        const existingConfig = (tenant.bookingConfig as Record<string, any>) ?? {};
+
+        await prisma.tenant.update({
+          where: { id: tenantId },
+          data: {
+            bookingConfig: {
+              ...existingConfig,
+              googleCalendar: {
+                accessToken: tokens.access_token,
+                refreshToken: tokens.refresh_token,
+                calendarId: 'primary',
+              },
+            },
+          },
+        });
+
+        return reply.type('text/html').send(
+          '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h1>✅ Google Calendar conectado!</h1><p>Você pode fechar esta janela.</p></body></html>'
+        );
+      } catch (err: any) {
+        return reply.code(500).send({ error: 'Failed to exchange token', detail: err?.message });
+      }
+    },
+  );
+
+  // All other booking routes require API key
   app.addHook('preHandler', authMiddleware);
 
   // Create a booking
@@ -139,10 +208,12 @@ export function registerBookingRoutes(app: FastifyInstance): void {
         return reply.code(400).send({ error: 'Google Calendar not configured' });
       }
 
+      const redirectUri = normalizeRedirectUri(env.GOOGLE_REDIRECT_URI ?? '');
+
       const oauth2Client = new (getGoogle()).auth.OAuth2(
         env.GOOGLE_CLIENT_ID,
         env.GOOGLE_CLIENT_SECRET,
-        env.GOOGLE_REDIRECT_URI,
+        redirectUri,
       );
 
       const authUrl = oauth2Client.generateAuthUrl({
@@ -153,51 +224,6 @@ export function registerBookingRoutes(app: FastifyInstance): void {
       });
 
       return reply.send({ authUrl });
-    },
-  );
-
-  // OAuth callback — exchanges code for tokens
-  app.get(
-    '/api/calendar/callback',
-    async (
-      request: FastifyRequest<{ Querystring: { code: string; state: string } }>,
-      reply: FastifyReply,
-    ) => {
-      const { code, state: tenantId } = request.query;
-
-      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-        return reply.code(400).send({ error: 'Google Calendar not configured' });
-      }
-
-      const oauth2Client = new (getGoogle()).auth.OAuth2(
-        env.GOOGLE_CLIENT_ID,
-        env.GOOGLE_CLIENT_SECRET,
-        env.GOOGLE_REDIRECT_URI,
-      );
-
-      const { tokens } = await oauth2Client.getToken(code);
-
-      // Store tokens in tenant's bookingConfig
-      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-      if (!tenant) return reply.code(404).send({ error: 'Tenant not found' });
-
-      const existingConfig = (tenant.bookingConfig as Record<string, any>) ?? {};
-
-      await prisma.tenant.update({
-        where: { id: tenantId },
-        data: {
-          bookingConfig: {
-            ...existingConfig,
-            googleCalendar: {
-              accessToken: tokens.access_token,
-              refreshToken: tokens.refresh_token,
-              calendarId: 'primary',
-            },
-          },
-        },
-      });
-
-      return reply.send({ success: true, message: 'Google Calendar connected' });
     },
   );
 }
