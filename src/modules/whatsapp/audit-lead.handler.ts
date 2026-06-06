@@ -148,13 +148,24 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
       }
 
       // Send the first message via WhatsApp
-      await sendMessage({
-        tenantId: tenant.id,
-        conversationId: conversation.id,
-        instanceName: tenant.evolutionInstanceId,
-        phone: normalizedPhone,
-        text: messageToSend,
-      });
+      let messageSent = true;
+      let sendError: string | undefined;
+      try {
+        await sendMessage({
+          tenantId: tenant.id,
+          conversationId: conversation.id,
+          instanceName: tenant.evolutionInstanceId,
+          phone: normalizedPhone,
+          text: messageToSend,
+        });
+      } catch (err: any) {
+        messageSent = false;
+        sendError = err?.response?.data?.message ?? err?.message ?? String(err);
+        logger.error(
+          { err: sendError, phone: normalizedPhone, tenantId: tenant.id },
+          'Audit lead: failed to send WhatsApp message (contact and conversation still created)',
+        );
+      }
 
       logger.info(
         {
@@ -162,8 +173,9 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
           tenant: tenant.businessName,
           conversationId: conversation.id,
           aiGenerated: !reportMessage,
+          messageSent,
         },
-        'Lead first message sent and conversation created',
+        'Audit lead processed',
       );
 
       return reply.code(200).send({
@@ -171,7 +183,11 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
         contactId: contact.id,
         conversationId: conversation.id,
         aiGenerated: !reportMessage,
-        message: 'Lead first message sent. When the lead replies, the chatbot will continue the conversation.',
+        messageSent,
+        sendError,
+        message: messageSent
+          ? 'Lead first message sent. When the lead replies, the chatbot will continue the conversation.'
+          : 'Lead and conversation created but WhatsApp message failed. The chatbot will handle the conversation when the lead messages.',
       });
     },
   );
