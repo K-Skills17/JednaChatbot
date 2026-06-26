@@ -486,12 +486,18 @@ async function applySideEffects(
 
   // Notifications
   try {
-    const contactName = action.extractedData?.nome ?? '';
+    const contactName = action.extractedData?.nome ?? action.extractedData?.name ?? '';
     if (action.shouldEscalate) {
-      await notificationService.notifyEscalation(tenantId, contactName, 'web-visitor');
+      await notificationService.notifyEscalation(
+        tenantId,
+        contactName,
+        'web-demo',
+        undefined,
+        { extractedData: updatedContext.extractedData, messageCount: updatedContext.messageCount },
+      );
     }
     if (action.leadStatus === 'qualified' && currentContext.messageCount <= 2) {
-      await notificationService.notifyNewLead(tenantId, contactName, 'web-visitor');
+      await notificationService.notifyNewLead(tenantId, contactName, 'web-demo');
     }
   } catch (err) {
     logger.error({ err }, 'Failed to send notification for web chat');

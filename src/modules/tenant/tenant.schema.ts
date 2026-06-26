@@ -69,6 +69,7 @@ export const createTenantSchema = z.object({
     })
     .optional(),
   plan: z.enum(['starter', 'pro', 'enterprise']).default('starter'),
+  evolutionInstanceId: z.string().optional(), // allow linking an existing Evolution instance
   handoffNumber: z.string().optional(),
   reviewConfig: z.object({
     googleUrl: z.string().optional(),

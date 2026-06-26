@@ -84,6 +84,7 @@ export class NotificationService {
     contactName: string,
     phone: string,
     reason?: string,
+    leadContext?: { extractedData?: Record<string, any>; messageCount?: number },
   ): Promise<void> {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return;
@@ -91,7 +92,7 @@ export class NotificationService {
     const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.escalation) return;
 
-    const content = `Atendimento escalado!\nCliente: ${contactName || phone}\nTelefone: ${phone}${reason ? `\nMotivo: ${reason}` : ''}`;
+    const content = buildEscalationMessage(contactName, phone, reason, leadContext);
 
     await this.sendToOwnerChannels(tenantId, 'escalation', content, notifyConfig);
   }
@@ -148,6 +149,81 @@ export class NotificationService {
       });
     }
   }
+}
+
+/**
+ * Build a rich escalation message that includes lead qualification context
+ * so the recipient (receptionist/sales rep) doesn't start from zero.
+ */
+function buildEscalationMessage(
+  contactName: string,
+  phone: string,
+  reason?: string,
+  leadContext?: { extractedData?: Record<string, any>; messageCount?: number },
+): string {
+  const lines: string[] = [];
+
+  lines.push('🔔 *Novo lead do Demo LK Digital*');
+  lines.push('');
+
+  // Identity
+  const name = contactName || leadContext?.extractedData?.nome || leadContext?.extractedData?.name;
+  if (name) lines.push(`*Nome:* ${name}`);
+
+  // How far they got in the demo
+  const msgCount = leadContext?.messageCount;
+  if (msgCount != null) {
+    const engagement = msgCount >= 6 ? 'Alto (percorreu o fluxo completo)' : msgCount >= 3 ? 'Médio' : 'Baixo (poucas mensagens)';
+    lines.push(`*Engajamento:* ${engagement} — ${msgCount} trocas de mensagem`);
+  }
+
+  // Extracted qualification data — skip internal fields and the __start__ trigger
+  const data = leadContext?.extractedData ?? {};
+  const skipKeys = new Set(['_reasoning', 'source']);
+  const labelMap: Record<string, string> = {
+    nome: 'Nome',
+    name: 'Nome',
+    email: 'E-mail',
+    tratamento: 'Interesse',
+    servico: 'Serviço de interesse',
+    urgencia: 'Urgência',
+    paciente_novo: 'Paciente novo',
+    tipo_paciente: 'Tipo',
+    cadeiras: 'Cadeiras na clínica',
+    num_cadeiras: 'Cadeiras',
+    whatsapp_atual: 'Setup WhatsApp atual',
+    decisor: 'É o decisor',
+    is_owner: 'É o dono',
+    orcamento: 'Orçamento',
+    marketing_budget: 'Orçamento de marketing',
+    dor_principal: 'Principal dor',
+    contexto: 'Contexto',
+    tipo_lead: 'Tipo de visitante',
+  };
+
+  const qualLines: string[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (skipKeys.has(key) || key.startsWith('_') || !value) continue;
+    if (typeof value === 'string' && value === '__start__') continue;
+    const label = labelMap[key] ?? key;
+    qualLines.push(`• *${label}:* ${value}`);
+  }
+
+  if (qualLines.length > 0) {
+    lines.push('');
+    lines.push('*Dados coletados no chat:*');
+    lines.push(...qualLines);
+  }
+
+  if (reason) {
+    lines.push('');
+    lines.push(`*Motivo do encaminhamento:* ${reason}`);
+  }
+
+  lines.push('');
+  lines.push('_Responda a essa mensagem para iniciar o atendimento._');
+
+  return lines.join('\n');
 }
 
 /**
