@@ -39,11 +39,11 @@ export type ConversationState =
   | 'awaiting_review'
   | 'closed';
 
-// ── Concierge Stage (granular PT-BR stages) ─────────────────
+// ── Concierge Stage (granular stages) ──────────────────────
 
 export type ConciergeStage =
-  | 'saudacao' | 'descoberta' | 'qualificacao' | 'valor'
-  | 'agendamento' | 'encaminhamento' | 'encerramento';
+  | 'greeting' | 'discovery' | 'qualifying' | 'value'
+  | 'booking' | 'handoff' | 'closing';
 
 // ── Conversation Context (stored in conversation.context JSON) ──
 

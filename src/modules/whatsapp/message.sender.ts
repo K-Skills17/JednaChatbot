@@ -1,27 +1,43 @@
 import crypto from 'crypto';
 import { prisma } from '../../config/database';
+import { twilioClient } from '../sms/twilio.client';
 import { evolutionClient } from './evolution.client';
 import { logger } from '../../utils/logger';
 
 interface SendMessageOptions {
   tenantId: string;
   conversationId: string;
-  instanceName: string;
+  instanceName?: string;   // Evolution instance — only for webchat channel
   phone: string;
   text: string;
+  channel?: string;        // 'sms' (default) | 'web'
   delay?: number;
 }
 
-/** Send an outbound message and persist it */
+/**
+ * Channel-aware message sender.
+ * - SMS channel (default): uses Twilio REST API
+ * - Web channel: uses Evolution API (webchat widget backend)
+ */
 export async function sendMessage(options: SendMessageOptions): Promise<void> {
-  const { tenantId, conversationId, instanceName, phone, text, delay } = options;
+  const { tenantId, conversationId, phone, text, channel = 'sms' } = options;
+
+  let externalMessageId: string | null = null;
 
   try {
-    const result = await evolutionClient.sendText(instanceName, {
-      number: phone,
-      text,
-      delay: delay ?? randomDelay(),
-    });
+    if (channel === 'web' && options.instanceName) {
+      // Webchat: use Evolution API
+      const result = await evolutionClient.sendText(options.instanceName, {
+        number: phone,
+        text,
+        delay: options.delay ?? randomDelay(),
+      });
+      externalMessageId = result?.key?.id ?? null;
+    } else {
+      // SMS: use Twilio
+      const result = await twilioClient.sendText(phone, text);
+      externalMessageId = result?.sid ?? null;
+    }
 
     await prisma.message.create({
       data: {
@@ -31,24 +47,22 @@ export async function sendMessage(options: SendMessageOptions): Promise<void> {
         direction: 'outbound',
         messageType: 'text',
         content: text,
-        whatsappMessageId: result?.key?.id ?? null,
+        externalMessageId,
         status: 'sent',
       },
     });
 
-    // Update conversation last message timestamp
     await prisma.conversation.update({
       where: { id: conversationId },
       data: { lastMessageAt: new Date() },
     });
   } catch (err: any) {
     const detail = err?.response?.data ?? err?.message ?? err;
-    logger.error({ detail, phone, instanceName, tenantId }, 'Failed to send message');
+    logger.error({ detail, phone, channel, tenantId }, 'Failed to send message');
     throw err;
   }
 }
 
-/** Random delay between 1-3 seconds to feel human */
 function randomDelay(): number {
   return Math.floor(Math.random() * 2000) + 1000;
 }

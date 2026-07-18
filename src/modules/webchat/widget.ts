@@ -8,17 +8,17 @@
 export function getWidgetScript(tenantId: string, baseUrl: string): string {
   return `
 (function() {
-  if (window.__lkChatLoaded) return;
-  window.__lkChatLoaded = true;
+  if (window.__jednaChatLoaded) return;
+  window.__jednaChatLoaded = true;
 
   var TENANT_ID = ${JSON.stringify(tenantId)};
   var BASE_URL  = ${JSON.stringify(baseUrl)};
-  var SESSION_KEY = 'lk_chat_session_' + TENANT_ID;
+  var SESSION_KEY = 'jedna_chat_session_' + TENANT_ID;
 
   // ── Default config (overridden by server) ──────────────────
   var cfg = {
     primaryColor: '#2563eb',
-    headerTitle: 'Chat',
+    headerTitle: 'Chat with us',
     welcomeMessage: null,
     position: 'bottom-right',
     avatarUrl: null,
@@ -54,7 +54,7 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
     // ── Styles ──────────────────────────────────────────────
     var css = document.createElement('style');
     css.textContent = \`
-      #lk-chat-bubble {
+      #jedna-chat-bubble {
         position: fixed; bottom: 20px; \${posRight ? 'right: 20px' : 'left: 20px'}; z-index: 99999;
         width: 60px; height: 60px; border-radius: 50%;
         background: \${c}; color: #fff; border: none; cursor: pointer;
@@ -62,10 +62,10 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
         display: flex; align-items: center; justify-content: center;
         transition: transform 0.2s, box-shadow 0.2s;
       }
-      #lk-chat-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 20px \${hexToRgba(c, 0.5)}; }
-      #lk-chat-bubble svg { width: 28px; height: 28px; }
+      #jedna-chat-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 20px \${hexToRgba(c, 0.5)}; }
+      #jedna-chat-bubble svg { width: 28px; height: 28px; }
 
-      #lk-chat-window {
+      #jedna-chat-window {
         position: fixed; bottom: 90px; \${posRight ? 'right: 20px' : 'left: 20px'}; z-index: 99999;
         width: 380px; max-width: calc(100vw - 32px); height: 520px; max-height: calc(100vh - 120px);
         background: #fff; border-radius: 16px;
@@ -73,115 +73,115 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
         display: none; flex-direction: column; overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       }
-      #lk-chat-window.open { display: flex; }
+      #jedna-chat-window.open { display: flex; }
 
-      #lk-chat-header {
+      #jedna-chat-header {
         background: \${c}; color: #fff; padding: 16px 18px;
         font-size: 15px; font-weight: 600;
         display: flex; align-items: center; justify-content: space-between;
       }
-      #lk-chat-header-left { display: flex; align-items: center; gap: 10px; }
-      #lk-chat-avatar {
+      #jedna-chat-header-left { display: flex; align-items: center; gap: 10px; }
+      #jedna-chat-avatar {
         width: 32px; height: 32px; border-radius: 50%;
         object-fit: cover; border: 2px solid rgba(255,255,255,0.3);
       }
-      #lk-chat-header button {
+      #jedna-chat-header button {
         background: none; border: none; color: #fff; cursor: pointer;
         font-size: 20px; line-height: 1; padding: 0 0 0 8px;
       }
 
-      #lk-chat-messages {
+      #jedna-chat-messages {
         flex: 1; overflow-y: auto; padding: 16px;
         display: flex; flex-direction: column; gap: 10px;
       }
-      .lk-msg {
+      .jedna-msg {
         max-width: 80%; padding: 10px 14px; border-radius: 14px;
         font-size: 14px; line-height: 1.45; word-wrap: break-word;
         white-space: pre-wrap;
       }
-      .lk-msg a { color: inherit; text-decoration: underline; }
-      .lk-msg-user {
+      .jedna-msg a { color: inherit; text-decoration: underline; }
+      .jedna-msg-user {
         align-self: flex-end; background: \${c}; color: #fff;
         border-bottom-right-radius: 4px;
       }
-      .lk-msg-bot {
+      .jedna-msg-bot {
         align-self: flex-start; background: #f1f5f9; color: #1e293b;
         border-bottom-left-radius: 4px;
       }
-      .lk-msg-typing {
+      .jedna-msg-typing {
         align-self: flex-start; background: #f1f5f9; color: #94a3b8;
         border-bottom-left-radius: 4px; font-style: italic;
       }
 
-      #lk-chat-input-bar {
+      #jedna-chat-input-bar {
         display: flex; border-top: 1px solid #e2e8f0; padding: 10px 12px; gap: 8px;
       }
-      #lk-chat-input {
+      #jedna-chat-input {
         flex: 1; border: 1px solid #e2e8f0; border-radius: 10px;
         padding: 10px 14px; font-size: 14px; outline: none;
         font-family: inherit; resize: none; min-height: 20px; max-height: 80px;
       }
-      #lk-chat-input:focus { border-color: \${c}; }
-      #lk-chat-send {
+      #jedna-chat-input:focus { border-color: \${c}; }
+      #jedna-chat-send {
         background: \${c}; color: #fff; border: none; border-radius: 10px;
         padding: 0 16px; cursor: pointer; font-size: 14px; font-weight: 600;
         white-space: nowrap;
       }
-      #lk-chat-send:hover { background: \${darken(c, 20)}; }
-      #lk-chat-send:disabled { opacity: 0.5; cursor: default; }
+      #jedna-chat-send:hover { background: \${darken(c, 20)}; }
+      #jedna-chat-send:disabled { opacity: 0.5; cursor: default; }
 
-      #lk-chat-powered {
+      #jedna-chat-powered {
         text-align: center; padding: 4px 0; font-size: 11px; color: #94a3b8;
         border-top: 1px solid #f1f5f9;
       }
-      #lk-chat-powered a { color: #64748b; text-decoration: none; }
-      #lk-chat-powered a:hover { text-decoration: underline; }
+      #jedna-chat-powered a { color: #64748b; text-decoration: none; }
+      #jedna-chat-powered a:hover { text-decoration: underline; }
 
       @media (max-width: 480px) {
-        #lk-chat-window {
+        #jedna-chat-window {
           bottom: 0; right: 0; left: 0;
           width: 100%; height: 100vh; max-height: 100vh;
           border-radius: 0;
         }
-        #lk-chat-bubble { bottom: 16px; \${posRight ? 'right: 16px' : 'left: 16px'}; }
+        #jedna-chat-bubble { bottom: 16px; \${posRight ? 'right: 16px' : 'left: 16px'}; }
       }
     \`;
     document.head.appendChild(css);
 
     // ── Chat Bubble ─────────────────────────────────────────
     var bubble = document.createElement('button');
-    bubble.id = 'lk-chat-bubble';
+    bubble.id = 'jedna-chat-bubble';
     bubble.setAttribute('aria-label', 'Open chat');
     bubble.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (BUBBLE_ICONS[cfg.bubbleIcon] || BUBBLE_ICONS.chat) + '</svg>';
     document.body.appendChild(bubble);
 
     // ── Chat Window ─────────────────────────────────────────
     var avatarHtml = cfg.avatarUrl
-      ? '<img id="lk-chat-avatar" src="' + cfg.avatarUrl + '" alt="avatar" />'
+      ? '<img id="jedna-chat-avatar" src="' + cfg.avatarUrl + '" alt="avatar" />'
       : '';
 
     var win = document.createElement('div');
-    win.id = 'lk-chat-window';
+    win.id = 'jedna-chat-window';
     win.innerHTML = \`
-      <div id="lk-chat-header">
-        <div id="lk-chat-header-left">
+      <div id="jedna-chat-header">
+        <div id="jedna-chat-header-left">
           \${avatarHtml}
           <span>\${cfg.headerTitle}</span>
         </div>
-        <button id="lk-chat-close" aria-label="Close chat">&times;</button>
+        <button id="jedna-chat-close" aria-label="Close chat">&times;</button>
       </div>
-      <div id="lk-chat-messages"></div>
-      <div id="lk-chat-input-bar">
-        <input id="lk-chat-input" type="text" placeholder="Digite sua mensagem..." autocomplete="off" />
-        <button id="lk-chat-send" disabled>Enviar</button>
+      <div id="jedna-chat-messages"></div>
+      <div id="jedna-chat-input-bar">
+        <input id="jedna-chat-input" type="text" placeholder="Type your message..." autocomplete="off" />
+        <button id="jedna-chat-send" disabled>Send</button>
       </div>
-      <div id="lk-chat-powered">Powered by <a href="https://lkdigital.odo.br" target="_blank" rel="noopener">LK Digital</a></div>
+      <div id="jedna-chat-powered">Powered by <a href="https://jednamarketing.com" target="_blank" rel="noopener">Jedna Marketing</a></div>
     \`;
     document.body.appendChild(win);
 
-    var messagesDiv = document.getElementById('lk-chat-messages');
-    var input       = document.getElementById('lk-chat-input');
-    var sendBtn     = document.getElementById('lk-chat-send');
+    var messagesDiv = document.getElementById('jedna-chat-messages');
+    var input       = document.getElementById('jedna-chat-input');
+    var sendBtn     = document.getElementById('jedna-chat-send');
     var sessionId   = localStorage.getItem(SESSION_KEY);
     var sending     = false;
     var welcomed    = false;
@@ -195,7 +195,7 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
         input.focus();
       }
     });
-    document.getElementById('lk-chat-close').addEventListener('click', function() {
+    document.getElementById('jedna-chat-close').addEventListener('click', function() {
       win.classList.remove('open');
     });
 
@@ -210,7 +210,7 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
 
     function addMessage(text, cls) {
       var div = document.createElement('div');
-      div.className = 'lk-msg ' + cls;
+      div.className = 'jedna-msg ' + cls;
       div.innerHTML = text.replace(/(https?:\\/\\/[^\\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
       messagesDiv.appendChild(div);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -221,7 +221,7 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
       if (welcomed) return;
       welcomed = true;
       if (cfg.welcomeMessage && messagesDiv.children.length === 0) {
-        addMessage(cfg.welcomeMessage, 'lk-msg-bot');
+        addMessage(cfg.welcomeMessage, 'jedna-msg-bot');
       }
     }
 
@@ -249,15 +249,15 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
         if (data.messages && data.messages.length > 0) {
           welcomed = true;
           data.messages.forEach(function(m) {
-            addMessage(m.content, m.role === 'user' ? 'lk-msg-user' : 'lk-msg-bot');
+            addMessage(m.content, m.role === 'user' ? 'jedna-msg-user' : 'jedna-msg-bot');
           });
         } else {
           showWelcome();
         }
       })
       .catch(function(err) {
-        console.error('LK Chat: session init failed', err);
-        addMessage('Não foi possível conectar ao assistente. Tente novamente.', 'lk-msg-bot');
+        console.error('Jedna Chat: session init failed', err);
+        addMessage('Unable to connect. Please try again.', 'jedna-msg-bot');
       });
     }
 
@@ -268,8 +268,8 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
       sendBtn.disabled = true;
       input.value = '';
 
-      addMessage(text, 'lk-msg-user');
-      var typing = addMessage('Digitando...', 'lk-msg-typing');
+      addMessage(text, 'jedna-msg-user');
+      var typing = addMessage('Typing...', 'jedna-msg-typing');
 
       fetch(BASE_URL + '/api/webchat/' + TENANT_ID + '/message', {
         method: 'POST',
@@ -280,18 +280,18 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
       .then(function(data) {
         typing.remove();
         if (data.reply) {
-          addMessage(data.reply, 'lk-msg-bot');
+          addMessage(data.reply, 'jedna-msg-bot');
           if (data.sessionId) {
             sessionId = data.sessionId;
             localStorage.setItem(SESSION_KEY, sessionId);
           }
         } else if (data.error) {
-          addMessage('Desculpe, ocorreu um erro. Tente novamente.', 'lk-msg-bot');
+          addMessage('Sorry, something went wrong. Please try again.', 'jedna-msg-bot');
         }
       })
       .catch(function() {
         typing.remove();
-        addMessage('Desculpe, não consegui conectar. Tente novamente.', 'lk-msg-bot');
+        addMessage('Sorry, we could not connect. Please try again.', 'jedna-msg-bot');
       })
       .finally(function() {
         sending = false;

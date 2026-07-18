@@ -13,6 +13,7 @@ import { reviewService } from '../modules/review/review.service';
 import { parseEnvelope, ConciergeEnvelope } from '../concierge/envelope';
 import { runComplianceGate, SAFE_HANDOFF_REPLY, ComplianceResult } from '../concierge/compliance';
 import { scoreQualification, QualificationRules, QualificationData } from '../concierge/qualification';
+import { redactPhi } from '../utils/phi-redact';
 import {
   MessageJobData,
   AiMessage,
@@ -37,11 +38,13 @@ const DEFAULT_CONTEXT: ConversationContext = {
 
 const MAX_HISTORY_MESSAGES = 20;
 
-const OPT_OUT_KEYWORDS = ['sair', 'parar', 'pare', 'stop', 'cancelar', 'nao quero mais', 'não quero mais'];
+// TCPA-required opt-out keywords — checked BEFORE AI
+const OPT_OUT_KEYWORDS = ['stop', 'unsubscribe', 'cancel', 'quit', 'end'];
 
 /** Main entry point — processes a single inbound message through the AI engine */
 export async function processMessage(job: MessageJobData): Promise<void> {
   const { tenantId, contactId, conversationId, phone, text, messageType } = job;
+  const channel: string = (job as any).channel ?? 'sms';
 
   // 1. Load tenant
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
@@ -57,9 +60,10 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     await sendMessage({
       tenantId,
       conversationId,
-      instanceName: tenant.evolutionInstanceId!,
+      instanceName: tenant.evolutionInstanceId ?? undefined,
       phone,
-      text: 'Desculpe, nosso limite de atendimentos do mes foi atingido. Por favor, entre em contato novamente em breve ou fale com nossa equipe diretamente.',
+      channel,
+      text: "We've reached our monthly message limit. Please call the office directly — we'd love to help you.",
     });
     return;
   }
@@ -78,7 +82,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   }
 
   if (text && isOptOut(text)) {
-    await handleOptOut(tenantId, contactId, conversationId, tenant.evolutionInstanceId!, phone);
+    await handleOptOut(tenantId, contactId, conversationId, phone, channel, tenant.evolutionInstanceId);
     await insertEvent(tenantId, contactId, 'opt_out', { phone });
     return;
   }
@@ -112,7 +116,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
 
   // 5c. Intercept review responses
   if (context.state === 'awaiting_review' && context.pendingReviewId && text) {
-    const handled = await handleReviewResponse(tenant, contact, context, conversationId, phone, text);
+    const handled = await handleReviewResponse(tenant, contact, context, conversationId, phone, channel, text);
     if (handled) {
       await incrementMessageCount(tenantId);
       return;
@@ -123,7 +127,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   const aiConfig = tenant.aiConfig as Record<string, any>;
   const effectiveText = resolveMessageText(text, messageType);
 
-  // 7. Load recent conversation history
+  // 7. Load recent conversation history (with PHI redaction for AI context)
   const history = await loadHistory(conversationId);
 
   // 8. Build system prompt
@@ -181,7 +185,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   // 11. Parse structured response via envelope parser (safe degradation on malformed JSON)
   const envelope = parseEnvelope(aiResponse.text);
 
-  // 12. Run compliance gate unconditionally (CFO/CRO — dental product, not optional)
+  // 12. Run compliance gate unconditionally (TCPA / dental board — not optional)
   let finalReply = envelope.reply;
   let action = envelope.action;
   let handoffReason = envelope.handoff_reason;
@@ -189,7 +193,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
   const complianceResult = runComplianceGate(envelope.reply, envelope.compliance_flag);
   if (!complianceResult.passed) {
     finalReply = SAFE_HANDOFF_REPLY;
-    action = 'encaminhar';
+    action = 'handoff';
     handoffReason = handoffReason ?? 'compliance';
     logger.warn(
       { phone, flaggedTerms: complianceResult.flaggedTerms },
@@ -197,10 +201,19 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     );
   }
 
-  // 13. Build the legacy AiAction from the envelope (backward compatibility)
+  // 13. Substitute {{PLACEHOLDER}} tokens with env-driven values
+  finalReply = substitutePlaceholders(finalReply, aiConfig);
+
+  // 14. Enforce 300-character SMS limit
+  if (channel === 'sms' && finalReply.length > 300) {
+    finalReply = finalReply.slice(0, 297) + '...';
+    logger.warn({ phone, originalLength: envelope.reply.length }, 'Reply truncated to 300 chars for SMS');
+  }
+
+  // 15. Build the legacy AiAction from the envelope
   const aiAction = envelopeToAction(envelope, finalReply, action);
 
-  // 14. If qualification decision, run smart model for scoring
+  // 16. If qualification decision, run smart model for scoring
   if (
     aiAction.nextState === 'qualified' &&
     !context.qualificationComplete
@@ -213,7 +226,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     }
   }
 
-  // 14b. Run deterministic qualification scoring if tenant has qualification rules
+  // 16b. Run deterministic qualification scoring if tenant has qualification rules
   const qualRules = (tenant as any).qualificationRules as QualificationRules | null;
   if (qualRules && envelope.qualification && Object.keys(envelope.qualification).length > 0) {
     const existingQual = (contact.qualificationData as Partial<QualificationData>) ?? {};
@@ -226,12 +239,11 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     if (qualified && !aiAction.leadStatus) {
       aiAction.leadStatus = 'qualified';
     }
-    // Merge qualification data into extractedData
     aiAction.extractedData = { ...aiAction.extractedData, ...merged };
   }
 
-  // 15. Create booking if AI confirmed a date/time
-  if (aiAction.bookingDate && aiAction.bookingTime && action === 'agendar') {
+  // 17. Create booking if AI confirmed a date/time
+  if (aiAction.bookingDate && aiAction.bookingTime && action === 'book') {
     try {
       const scheduledAt = parseBookingDateTime(aiAction.bookingDate, aiAction.bookingTime, tenant.timezone);
       if (scheduledAt) {
@@ -240,18 +252,17 @@ export async function processMessage(job: MessageJobData): Promise<void> {
           contactId,
           scheduledAt,
           appointmentType: context.extractedData?.appointmentType ?? undefined,
-          notes: `Agendado via chatbot. ${context.extractedData?.notes ?? ''}`.trim(),
+          notes: `Booked via chatbot. ${context.extractedData?.notes ?? ''}`.trim(),
         });
         aiAction.leadStatus = 'booked';
       }
     } catch (err) {
       logger.error({ err }, 'Failed to create booking from AI action');
     }
-  } else if (action === 'agendar' && !aiAction.bookingDate) {
-    // Create preference-based appointment (day/period from qualification data)
+  } else if (action === 'book' && !aiAction.bookingDate) {
     const qualData = envelope.qualification as Partial<QualificationData>;
-    const preferredDay = qualData.dia_preferido as string | undefined;
-    const preferredPeriod = qualData.periodo_preferido as string | undefined;
+    const preferredDay = qualData.preferred_day as string | undefined;
+    const preferredPeriod = qualData.preferred_period as string | undefined;
     if (preferredDay || preferredPeriod) {
       try {
         await prisma.booking.create({
@@ -259,11 +270,11 @@ export async function processMessage(job: MessageJobData): Promise<void> {
             id: crypto.randomUUID(),
             tenantId,
             contactId,
-            appointmentType: context.extractedData?.appointmentType ?? 'avaliacao',
+            appointmentType: context.extractedData?.appointmentType ?? 'consultation',
             preferredDay: preferredDay ?? null,
             preferredPeriod: preferredPeriod ?? null,
-            status: 'solicitado',
-            notes: `Agendado via chatbot. ${envelope.handoff_summary ?? ''}`.trim(),
+            status: 'requested',
+            notes: `Booked via chatbot. ${envelope.handoff_summary ?? ''}`.trim(),
           },
         });
         aiAction.leadStatus = 'booked';
@@ -273,21 +284,22 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     }
   }
 
-  // 16. Send reply via WhatsApp
+  // 18. Send reply (channel-aware)
   await sendMessage({
     tenantId,
     conversationId,
-    instanceName: tenant.evolutionInstanceId!,
+    instanceName: tenant.evolutionInstanceId ?? undefined,
     phone,
+    channel,
     text: finalReply,
   });
 
-  // 17. Update the outbound message with AI metadata and cost tracking
+  // 19. Update outbound message with AI metadata and cost tracking
   const costUsd = calculateAiCost(model, aiResponse.inputTokens, aiResponse.outputTokens);
   await updateLastOutboundMessage(conversationId, model, aiResponse.totalTokens, costUsd);
   await trackTenantAiCost(tenantId, costUsd);
 
-  // 18. Log compliance audit (every outbound, always — defensible CFO record)
+  // 20. Log compliance audit (every outbound, always — defensible legal record)
   const lastMsg = await prisma.message.findFirst({
     where: { conversationId, direction: 'outbound' },
     orderBy: { createdAt: 'desc' },
@@ -307,12 +319,12 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     },
   });
 
-  // 19. Create handoff record if escalating
-  if (action === 'encaminhar' || action === 'agendar') {
+  // 21. Create handoff record if escalating
+  if (action === 'handoff' || action === 'book') {
     const summary = envelope.handoff_summary
-      ?? (action === 'agendar'
-        ? `Quer agendar. ${(envelope.qualification as any)?.motivo ?? ''}`.trim()
-        : `Encaminhado (${handoffReason ?? 'n/d'}).`);
+      ?? (action === 'book'
+        ? `Wants to book. ${(envelope.qualification as any)?.treatment_need ?? ''}`.trim()
+        : `Handed off (${handoffReason ?? 'n/a'}).`);
 
     await prisma.handoff.create({
       data: {
@@ -320,34 +332,29 @@ export async function processMessage(job: MessageJobData): Promise<void> {
         leadId: contactId,
         conversationId,
         tenantId,
-        reason: action === 'agendar' ? 'agendamento' : (handoffReason ?? 'user_request'),
+        reason: action === 'book' ? 'booking' : (handoffReason ?? 'user_request'),
         summary,
       },
     });
 
-    // Notify clinic staff via WhatsApp if handoff number is configured
+    // Notify practice staff via Telegram
     const handoffNumber = (tenant as any).handoffNumber as string | null;
-    if (handoffNumber && tenant.evolutionInstanceId) {
+    if (handoffNumber || env.TELEGRAM_BOT_WEBHOOK) {
       try {
-        const notifText =
-          `Novo lead para a equipe\n` +
-          `Nome: ${contact.name ?? '(nao informado)'}\n` +
-          `WhatsApp: ${contact.phone}\n` +
-          `Resumo: ${summary}`;
-        await sendMessage({
+        await notificationService.notifyEscalation(
           tenantId,
-          conversationId,
-          instanceName: tenant.evolutionInstanceId,
-          phone: handoffNumber,
-          text: notifText,
-        });
+          contact.name ?? '',
+          phone,
+          handoffReason ?? undefined,
+          { extractedData: context.extractedData, messageCount: context.messageCount },
+        );
       } catch (err) {
-        logger.error({ err }, 'Failed to notify clinic on handoff');
+        logger.error({ err }, 'Failed to notify practice on handoff');
       }
     }
   }
 
-  // 20. Log event
+  // 22. Log event
   await insertEvent(tenantId, contactId, action, {
     stage: envelope.stage,
     score: aiAction.leadScore,
@@ -355,10 +362,10 @@ export async function processMessage(job: MessageJobData): Promise<void> {
     compliancePassed: complianceResult?.passed ?? true,
   });
 
-  // 21. Apply side effects (update conversation, contact, notifications)
+  // 23. Apply side effects (update conversation, contact, notifications)
   await applySideEffects(tenantId, conversationId, contactId, phone, context, aiAction, envelope.stage);
 
-  // 22. Increment monthly message counter for plan enforcement
+  // 24. Increment monthly message counter for plan enforcement
   await incrementMessageCount(tenantId);
 
   logger.info(
@@ -367,6 +374,7 @@ export async function processMessage(job: MessageJobData): Promise<void> {
       state: aiAction.nextState ?? context.state,
       action, stage: envelope.stage,
       compliancePassed: complianceResult?.passed ?? true,
+      chars: finalReply.length,
     },
     'Message processed successfully',
   );
@@ -374,21 +382,32 @@ export async function processMessage(job: MessageJobData): Promise<void> {
 
 // ── Helpers ─────────────────────────────────────────────────
 
+/** Substitute {{PLACEHOLDER}} tokens with env-driven values */
+function substitutePlaceholders(text: string, aiConfig: Record<string, any>): string {
+  const vars: Record<string, string> = {
+    CALENDLY_URL: env.CALENDLY_URL ?? aiConfig.calendlyUrl ?? '[booking link — set CALENDLY_URL env var]',
+    PRACTICE_PHONE: aiConfig.phone ?? '[call the office]',
+    PRACTICE_URL: aiConfig.website ?? '',
+    PRACTICE_NAME: env.PRACTICE_NAME ?? aiConfig.businessName ?? 'the practice',
+  };
+
+  return text.replace(/\{\{(\w+)\}\}/g, (_match, key) => vars[key] ?? _match);
+}
+
 /** Convert a ConciergeEnvelope to the legacy AiAction format */
 function envelopeToAction(
   envelope: ConciergeEnvelope,
   finalReply: string,
   action: string,
 ): AiAction {
-  // Map concierge stage back to conversation state
   const stageToState: Record<string, string> = {
-    saudacao: 'greeting',
-    descoberta: 'qualifying',
-    qualificacao: 'qualifying',
-    valor: 'qualified',
-    agendamento: 'booking',
-    encaminhamento: 'closed',
-    encerramento: 'closed',
+    greeting: 'greeting',
+    discovery: 'qualifying',
+    qualifying: 'qualifying',
+    value: 'qualified',
+    booking: 'booking',
+    handoff: 'closed',
+    closing: 'closed',
   };
 
   return {
@@ -397,7 +416,7 @@ function envelopeToAction(
     extractedData: envelope.extractedData ?? envelope.qualification as Record<string, any>,
     leadScore: envelope.leadScore,
     leadStatus: envelope.leadStatus as any,
-    shouldEscalate: action === 'encaminhar',
+    shouldEscalate: action === 'handoff',
     qualificationReasoning: envelope.qualificationReasoning,
     bookingDate: envelope.bookingDate,
     bookingTime: envelope.bookingTime,
@@ -434,8 +453,9 @@ async function handleOptOut(
   tenantId: string,
   contactId: string,
   conversationId: string,
-  instanceName: string,
   phone: string,
+  channel: string,
+  evolutionInstanceId: string | null,
 ): Promise<void> {
   await prisma.contact.update({
     where: { id: contactId },
@@ -450,9 +470,10 @@ async function handleOptOut(
   await sendMessage({
     tenantId,
     conversationId,
-    instanceName,
+    instanceName: evolutionInstanceId ?? undefined,
     phone,
-    text: 'Entendido! Voce nao recebera mais mensagens. Se precisar de algo no futuro, e so mandar mensagem. Ate mais!',
+    channel,
+    text: 'You have been unsubscribed and will not receive any more messages. Reply START to re-subscribe anytime.',
   });
 
   logger.info({ phone }, 'Contact opted out');
@@ -461,10 +482,10 @@ async function handleOptOut(
 function resolveMessageText(text: string | null, messageType: string): string {
   if (text) return text;
   switch (messageType) {
-    case 'audio': return '[O contato enviou uma mensagem de audio]';
-    case 'image': return '[O contato enviou uma imagem]';
-    case 'document': return '[O contato enviou um documento]';
-    default: return '[O contato enviou uma mensagem nao-textual]';
+    case 'audio': return '[Contact sent a voice message]';
+    case 'image': return '[Contact sent an image]';
+    case 'document': return '[Contact sent a document]';
+    default: return '[Contact sent a non-text message]';
   }
 }
 
@@ -481,7 +502,7 @@ async function loadHistory(conversationId: string): Promise<AiMessage[]> {
     .filter((m) => m.content)
     .map((m) => ({
       role: (m.direction === 'inbound' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.content!,
+      content: redactPhi(m.content!),
     }));
 }
 
@@ -515,7 +536,7 @@ async function runQualificationEvaluation(
     const model = getModelForTier(providerName, 'smart');
 
     const summary = history
-      .map((m) => `${m.role === 'user' ? 'Contato' : 'Assistente'}: ${m.content}`)
+      .map((m) => `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`)
       .join('\n');
 
     const prompt = buildQualificationPrompt({
@@ -527,7 +548,7 @@ async function runQualificationEvaluation(
     });
 
     const response = await provider.chat({
-      systemPrompt: 'Voce e um avaliador de leads. Responda apenas com JSON.',
+      systemPrompt: 'You are a lead qualification evaluator. Respond only with JSON.',
       messages: [{ role: 'user', content: prompt }],
       model,
       temperature: 0.3,
@@ -676,10 +697,7 @@ async function applySideEffects(
     lastMessageAt: new Date(),
   };
 
-  // Update stage if provided
-  if (stage) {
-    conversationUpdate.stage = stage;
-  }
+  if (stage) conversationUpdate.stage = stage;
 
   if (action.nextState === 'closed') {
     conversationUpdate.status = 'closed';
@@ -694,15 +712,10 @@ async function applySideEffects(
     data: conversationUpdate,
   });
 
-  // Update contact if lead data changed
   const contactUpdate: Record<string, any> = {};
 
-  if (action.leadScore != null) {
-    contactUpdate.leadScore = action.leadScore;
-  }
-  if (action.leadStatus) {
-    contactUpdate.leadStatus = action.leadStatus;
-  }
+  if (action.leadScore != null) contactUpdate.leadScore = action.leadScore;
+  if (action.leadStatus) contactUpdate.leadStatus = action.leadStatus;
   if (action.qualificationReasoning || action.extractedData) {
     const existing =
       ((
@@ -729,14 +742,12 @@ async function applySideEffects(
     });
   }
 
-  // Track campaign funnel progression
   if (action.leadStatus === 'qualified' || action.leadStatus === 'booked') {
     await trackCampaignFunnel(contactId, action.leadStatus);
   }
 
-  // Send notifications (non-blocking)
   try {
-    const contactName = action.extractedData?.nome ?? '';
+    const contactName = action.extractedData?.name ?? '';
 
     if (action.shouldEscalate) {
       await notificationService.notifyEscalation(tenantId, contactName as string, phone);
@@ -762,24 +773,17 @@ function parseRating(text: string): number | null {
   }
 
   const wordMap: Record<string, number> = {
-    um: 1, uma: 1, dois: 2, duas: 2, tres: 3, três: 3,
-    quatro: 4, cinco: 5,
+    one: 1, two: 2, three: 3, four: 4, five: 5,
   };
   for (const [word, val] of Object.entries(wordMap)) {
-    if (normalized === word || normalized.includes(`nota ${word}`) || normalized.includes(`dou ${word}`)) {
+    if (normalized === word || normalized.includes(`${word} star`)) {
       return val;
     }
   }
 
-  const patternMatch = normalized.match(/(?:nota\s*:?\s*|dou\s+(?:nota\s+)?|avalio\s+(?:com\s+)?)(\d)/);
+  const patternMatch = normalized.match(/(\d)\s*(?:star|out of)/);
   if (patternMatch) {
     const n = parseInt(patternMatch[1], 10);
-    if (n >= 1 && n <= 5) return n;
-  }
-
-  const starsMatch = normalized.match(/(\d)\s*(?:estrela|star)/);
-  if (starsMatch) {
-    const n = parseInt(starsMatch[1], 10);
     if (n >= 1 && n <= 5) return n;
   }
 
@@ -798,6 +802,7 @@ async function handleReviewResponse(
   context: ConversationContext,
   conversationId: string,
   phone: string,
+  channel: string,
   text: string,
 ): Promise<boolean> {
   const rating = parseRating(text);
@@ -818,18 +823,16 @@ async function handleReviewResponse(
   const externalLink = reviewConfig.googleUrl || reviewConfig.facebookUrl;
 
   if (rating >= 4) {
-    replyText = `Muito obrigado${contactName ? `, ${contactName}` : ''}! Ficamos muito felizes com sua avaliacao! `;
+    replyText = `Thank you${contactName ? `, ${contactName}` : ''}! We're so glad to hear that. `;
     if (externalLink) {
-      replyText += `\n\nSe puder nos ajudar com uma avaliacao publica, agradecemos demais:\n${externalLink}`;
+      replyText += `If you have a moment, a quick review would mean the world to us: ${externalLink}`;
     } else {
-      replyText += `Seu feedback nos motiva a melhorar cada vez mais!`;
+      replyText += `Your feedback keeps our team motivated!`;
     }
   } else if (rating === 3) {
-    replyText = `Obrigado pelo feedback${contactName ? `, ${contactName}` : ''}! ` +
-      `Queremos sempre melhorar. Tem alguma sugestao do que poderiamos fazer melhor?`;
+    replyText = `Thank you for the feedback${contactName ? `, ${contactName}` : ''}! We always want to improve — anything specific we could do better?`;
   } else {
-    replyText = `Lamentamos que sua experiencia nao tenha sido a melhor${contactName ? `, ${contactName}` : ''}. ` +
-      `Vamos encaminhar seu feedback para nossa equipe para que possamos resolver isso. Obrigado por nos informar!`;
+    replyText = `We're sorry your experience wasn't great${contactName ? `, ${contactName}` : ''}. Our team will follow up to make things right. Thank you for letting us know.`;
 
     try {
       await notificationService.notifyEscalation(tenant.id, contactName, phone);
@@ -841,8 +844,9 @@ async function handleReviewResponse(
   await sendMessage({
     tenantId: tenant.id,
     conversationId,
-    instanceName: tenant.evolutionInstanceId!,
+    instanceName: tenant.evolutionInstanceId ?? undefined,
     phone,
+    channel,
     text: replyText,
   });
 

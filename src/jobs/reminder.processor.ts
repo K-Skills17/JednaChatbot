@@ -17,7 +17,7 @@ interface NoShowJobData {
   contactId: string;
 }
 
-/** Process a booking reminder — sends a WhatsApp message to the contact */
+/** Process a booking reminder — sends an SMS to the contact */
 export async function reminderProcessor(job: Job<ReminderJobData | NoShowJobData>): Promise<void> {
   if (job.name === 'no-show-followup') {
     return noShowFollowUpProcessor(job as Job<NoShowJobData>);
@@ -58,33 +58,27 @@ export async function reminderProcessor(job: Job<ReminderJobData | NoShowJobData
     return;
   }
 
-  if (!booking.tenant.evolutionInstanceId) {
-    logger.warn({ bookingId }, 'No Evolution instance for reminder');
-    return;
-  }
-
   const formattedDate = formatDatePtBr(booking.scheduledAt ?? new Date(), booking.tenant.timezone);
-  const contactName = booking.contact.name ?? '';
+  const contactName = booking.contact.name ? booking.contact.name.split(' ')[0] : '';
 
   let reminderText: string;
   if (type === '24h') {
-    const meetInfo = booking.meetLink
-      ? `\n\nLink da reunião: ${booking.meetLink}`
-      : '';
-    reminderText = `Olá${contactName ? ` ${contactName}` : ''}! 😊 Só passando para lembrar do seu agendamento amanhã, ${formattedDate}. Confirmado? Responda "sim" para confirmar ou "reagendar" se precisar mudar.${meetInfo}`;
+    const meetInfo = booking.meetLink ? ` Meeting link: ${booking.meetLink}` : '';
+    reminderText = `Hi${contactName ? ` ${contactName}` : ''}! Just a reminder about your appointment tomorrow, ${formattedDate}. Reply YES to confirm or RESCHEDULE to pick a new time.${meetInfo}`;
   } else {
-    const meetInfo = booking.meetLink
-      ? `\n\nAcesse a reunião aqui: ${booking.meetLink}`
-      : '';
-    reminderText = `Oi${contactName ? ` ${contactName}` : ''}! Seu agendamento é daqui a 1 hora, às ${formattedDate}. Nos vemos em breve! 🙂${meetInfo}`;
+    const meetInfo = booking.meetLink ? ` Join here: ${booking.meetLink}` : '';
+    reminderText = `Hi${contactName ? ` ${contactName}` : ''}! Your appointment is in 1 hour at ${formattedDate}. See you soon!${meetInfo}`;
   }
+
+  // Enforce 300-char SMS limit
+  if (reminderText.length > 300) reminderText = reminderText.slice(0, 297) + '...';
 
   await sendMessage({
     tenantId,
     conversationId: conversation.id,
-    instanceName: booking.tenant.evolutionInstanceId,
     phone: booking.contact.phone,
     text: reminderText,
+    channel: 'sms',
   });
 
   // Mark reminder as sent (only once, on the first reminder)
@@ -102,7 +96,7 @@ export async function reminderProcessor(job: Job<ReminderJobData | NoShowJobData
  * No-show follow-up processor.
  * Fires 30 min after the scheduled appointment time.
  * If the booking is still "confirmed" (not marked as "completed"),
- * marks it as no_show and sends a re-engagement WhatsApp message.
+ * marks it as no_show and sends a re-engagement SMS.
  */
 async function noShowFollowUpProcessor(job: Job<NoShowJobData>): Promise<void> {
   const { bookingId, tenantId, contactId } = job.data;
@@ -159,25 +153,19 @@ async function noShowFollowUpProcessor(job: Job<NoShowJobData>): Promise<void> {
     return;
   }
 
-  if (!booking.tenant.evolutionInstanceId) {
-    logger.warn({ bookingId }, 'No Evolution instance for no-show follow-up');
-    return;
-  }
-
-  const contactName = booking.contact.name ?? '';
+  const firstName = booking.contact.name ? booking.contact.name.split(' ')[0] : '';
   const formattedDate = formatDatePtBr(booking.scheduledAt ?? new Date(), booking.tenant.timezone);
 
   const followUpText =
-    `Oi${contactName ? ` ${contactName}` : ''}! Notamos que não conseguiu comparecer ao agendamento de ${formattedDate}. ` +
-    `Sem problemas, sabemos que imprevistos acontecem! 😊\n\n` +
-    `Gostaria de reagendar para outro horário? É só responder aqui que encontramos o melhor horário para você.`;
+    `Hi${firstName ? ` ${firstName}` : ''}! We noticed you weren't able to make your ${formattedDate} appointment. ` +
+    `No worries — would you like to reschedule? Just reply here and we'll find a time that works for you.`;
 
   await sendMessage({
     tenantId,
     conversationId: conversation.id,
-    instanceName: booking.tenant.evolutionInstanceId,
     phone: booking.contact.phone,
     text: followUpText,
+    channel: 'sms',
   });
 
   // Reopen the conversation so the AI can handle the rescheduling

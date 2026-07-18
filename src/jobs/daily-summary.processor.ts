@@ -7,7 +7,7 @@ import { notificationService } from '../modules/notification/notification.servic
 /**
  * Daily summary processor — runs once per day.
  * For each active tenant with notification config, generates a daily
- * report and sends it via the configured channels (WhatsApp/email/webhook).
+ * report and sends it via the configured channels (Telegram/email/webhook).
  */
 export async function dailySummaryProcessor(_job: Job): Promise<void> {
   const tenants = await prisma.tenant.findMany({
@@ -34,12 +34,12 @@ export async function dailySummaryProcessor(_job: Job): Promise<void> {
       const report = formatReport(tenant.businessName, overview, today);
 
       // Send to all configured channels
-      if (notifyConfig.ownerPhone) {
+      if (notifyConfig.telegramChatId) {
         await notificationService.notify({
           tenantId: tenant.id,
           type: 'daily_summary',
-          channel: 'whatsapp',
-          recipient: notifyConfig.ownerPhone,
+          channel: 'telegram',
+          recipient: notifyConfig.telegramChatId,
           content: report,
         });
       }

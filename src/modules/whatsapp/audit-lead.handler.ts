@@ -82,10 +82,6 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
         return reply.code(404).send({ error: 'No active tenant found' });
       }
 
-      if (!tenant.evolutionInstanceId) {
-        return reply.code(400).send({ error: 'Tenant has no WhatsApp instance configured' });
-      }
-
       // Normalize phone (strip WhatsApp JID format if passed)
       const normalizedPhone = phone.includes('@') ? fromWhatsAppJid(phone) : phone;
 
@@ -147,23 +143,23 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
         messageToSend = await generateFirstMessage(tenant, name ?? null, auditData ?? {});
       }
 
-      // Send the first message via WhatsApp
+      // Send the first message via SMS
       let messageSent = true;
       let sendError: string | undefined;
       try {
         await sendMessage({
           tenantId: tenant.id,
           conversationId: conversation.id,
-          instanceName: tenant.evolutionInstanceId,
           phone: normalizedPhone,
           text: messageToSend,
+          channel: 'sms',
         });
       } catch (err: any) {
         messageSent = false;
         sendError = err?.response?.data?.message ?? err?.message ?? String(err);
         logger.error(
           { err: sendError, phone: normalizedPhone, tenantId: tenant.id },
-          'Audit lead: failed to send WhatsApp message (contact and conversation still created)',
+          'Audit lead: failed to send SMS (contact and conversation still created)',
         );
       }
 
@@ -186,8 +182,8 @@ export function registerAuditLeadRoutes(app: FastifyInstance): void {
         messageSent,
         sendError,
         message: messageSent
-          ? 'Lead first message sent. When the lead replies, the chatbot will continue the conversation.'
-          : 'Lead and conversation created but WhatsApp message failed. The chatbot will handle the conversation when the lead messages.',
+          ? 'Lead first message sent via SMS. When the lead replies, the chatbot will continue the conversation.'
+          : 'Lead and conversation created but SMS failed. The chatbot will handle the conversation when the lead messages.',
       });
     },
   );
@@ -202,7 +198,8 @@ async function generateFirstMessage(
   leadName: string | null,
   leadData: Record<string, any>,
 ): Promise<string> {
-  const fallback = `Olá${leadName ? ` ${leadName.split(' ')[0]}` : ''}! Aqui é a equipe da ${tenant.businessName}. Vi que você se interessou pelos nossos serviços — como podemos te ajudar?`;
+  const firstName = leadName ? leadName.split(' ')[0] : null;
+  const fallback = `Hi${firstName ? ` ${firstName}` : ''}! This is the team at ${tenant.businessName}. We saw you were interested in our services — how can we help you today?`;
 
   try {
     const aiConfig = tenant.aiConfig as Record<string, any>;
@@ -210,41 +207,36 @@ async function generateFirstMessage(
     const provider = getProvider(providerName);
     const model = getModelForTier(providerName, 'fast');
 
-    const firstName = leadName ? leadName.split(' ')[0] : null;
-    const source = leadData.source || 'formulário';
-    const businessType = leadData.businessType || '';
-    const website = leadData.website || '';
+    const source = leadData.source || 'a form';
     const formAnswers = leadData.formAnswers || {};
 
     // Build context about the lead's form answers
     const answerEntries = Object.entries(formAnswers).filter(([, v]) => v);
     let formContext = '';
     if (answerEntries.length > 0) {
-      formContext = '\n\nRespostas do formulário do lead:\n' +
+      formContext = '\n\nLead form answers:\n' +
         answerEntries.map(([k, v]) => `- ${String(k).replace(/_/g, ' ')}: ${v}`).join('\n');
     }
 
-    const prompt = `Gere a PRIMEIRA mensagem de WhatsApp para um novo lead que acabou de preencher um formulário de ${source}.
+    const prompt = `Write the FIRST SMS text message to a new dental lead who just filled out ${source}.
 
-Informações do lead:
-- Nome: ${leadName || 'não informado'}
-- Tipo de negócio: ${businessType || 'não informado'}
-- Website: ${website || 'não informado'}${formContext}
+Lead info:
+- Name: ${leadName || 'not provided'}${formContext}
 
-Regras:
-1. ${firstName ? `Cumprimente "${firstName}" pelo nome` : 'Cumprimente de forma calorosa'}
-2. Mencione que você é da ${tenant.businessName}
-3. Faça referência ao interesse/dados do lead de forma natural
-4. Termine com UMA pergunta de qualificação relevante
-5. Máximo 4-5 linhas, tom acolhedor e profissional
-6. Retorne APENAS o texto da mensagem, sem JSON, sem aspas, sem formatação extra`;
+Rules:
+1. ${firstName ? `Greet "${firstName}" by first name` : 'Use a warm greeting'}
+2. Identify yourself as the team at ${tenant.businessName}
+3. Reference their interest naturally
+4. End with ONE relevant question to start qualifying
+5. Keep it under 300 characters total — this is an SMS
+6. Return ONLY the message text, no JSON, no quotes, no extra formatting`;
 
     const response = await provider.chat({
-      systemPrompt: `Você é o assistente virtual da ${tenant.businessName}. Escreva mensagens curtas e profissionais em português brasileiro para WhatsApp.`,
+      systemPrompt: `You are the virtual assistant for ${tenant.businessName}, a dental practice. Write short, friendly, professional SMS messages in English.`,
       messages: [{ role: 'user', content: prompt }],
       model,
       temperature: 0.7,
-      maxTokens: 300,
+      maxTokens: 150,
     });
 
     // Clean up the response — strip any accidental JSON wrapping or quotes

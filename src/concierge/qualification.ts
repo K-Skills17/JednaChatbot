@@ -3,39 +3,39 @@
 
 export interface QualificationRules {
   weights?: {
-    motivo?: number;
-    regiao_ok?: number;
-    prazo_near_term?: number;
-    has_slot?: number;
-    ja_avaliou_antes?: number;
+    treatment_need?: number;
+    location_ok?: number;
+    near_term?: number;
+    has_time_slot?: number;
+    prior_patient?: number;
   };
   near_term_keywords?: string[];
   qualified_threshold?: number;
 }
 
 export interface QualificationData {
-  nome?: string | null;
-  motivo?: string | null;
-  situacao_atual?: string | null;
-  ja_avaliou_antes?: string | null;
-  prazo?: string | null;
-  regiao_ok?: boolean | null;
-  dia_preferido?: string | null;
-  periodo_preferido?: string | null;
+  name?: string | null;
+  treatment_need?: string | null;   // What treatment the patient needs / inquiry about
+  current_situation?: string | null; // Why they haven't scheduled yet
+  prior_patient?: string | null;    // Were they a previous patient?
+  timeline?: string | null;         // When are they looking to book?
+  location_ok?: boolean | null;     // Is the practice location acceptable?
+  preferred_day?: string | null;    // Preferred day of week
+  preferred_period?: string | null; // Preferred time of day
   [k: string]: unknown;
 }
 
 const DEFAULT_RULES: Required<QualificationRules> = {
   weights: {
-    motivo: 20,
-    regiao_ok: 25,
-    prazo_near_term: 25,
-    has_slot: 20,
-    ja_avaliou_antes: 10,
+    treatment_need: 20,
+    location_ok: 25,
+    near_term: 25,
+    has_time_slot: 20,
+    prior_patient: 10,
   },
   near_term_keywords: [
-    'agora', 'o quanto antes', 'esse m', 'este m',
-    'urgente', 'logo', 'essa semana', 'proxim',
+    'asap', 'as soon as possible', 'this week', 'next week',
+    'urgent', 'right away', 'this month', 'soon',
   ],
   qualified_threshold: 60,
 };
@@ -60,14 +60,14 @@ export function scoreQualification(
   const w = r.weights;
   let score = 0;
 
-  if (q.motivo) score += w.motivo ?? 0;
-  if (q.regiao_ok === true) score += w.regiao_ok ?? 0;
-  if (q.ja_avaliou_antes) score += w.ja_avaliou_antes ?? 0;
-  if (q.dia_preferido || q.periodo_preferido) score += w.has_slot ?? 0;
+  if (q.treatment_need) score += w.treatment_need ?? 0;
+  if (q.location_ok === true) score += w.location_ok ?? 0;
+  if (q.prior_patient) score += w.prior_patient ?? 0;
+  if (q.preferred_day || q.preferred_period) score += w.has_time_slot ?? 0;
 
-  const prazo = (q.prazo ?? '').toString().toLowerCase();
-  if (prazo && r.near_term_keywords.some((k) => prazo.includes(k.toLowerCase()))) {
-    score += w.prazo_near_term ?? 0;
+  const timeline = (q.timeline ?? '').toString().toLowerCase();
+  if (timeline && r.near_term_keywords.some((k) => timeline.includes(k.toLowerCase()))) {
+    score += w.near_term ?? 0;
   }
 
   score = Math.max(0, Math.min(100, score));

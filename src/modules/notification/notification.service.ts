@@ -1,10 +1,11 @@
 import crypto from 'crypto';
 import { prisma } from '../../config/database';
 import { logger } from '../../utils/logger';
+import { env } from '../../config/env';
 import { getNotificationQueue } from '../../jobs/queue.setup';
 
 export type NotificationType = 'new_lead' | 'booking' | 'escalation' | 'daily_summary';
-export type NotificationChannel = 'whatsapp' | 'email' | 'webhook';
+export type NotificationChannel = 'telegram' | 'email' | 'webhook' | 'sms';
 
 interface NotifyInput {
   tenantId: string;
@@ -49,8 +50,7 @@ export class NotificationService {
     const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.newLead) return;
 
-    const content = `Novo lead: ${contactName || phone}\nTelefone: ${phone}`;
-
+    const content = `New lead: ${contactName || phone}\nPhone: ${phone}`;
     await this.sendToOwnerChannels(tenantId, 'new_lead', content, notifyConfig);
   }
 
@@ -66,19 +66,19 @@ export class NotificationService {
     const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.booking) return;
 
-    const dateStr = scheduledAt.toLocaleDateString('pt-BR', {
+    const dateStr = scheduledAt.toLocaleDateString('en-US', {
       weekday: 'long',
-      day: '2-digit',
-      month: '2-digit',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     });
-    const content = `Novo agendamento!\nCliente: ${contactName}\nData: ${dateStr}`;
-
+    const content = `New appointment booked!\nPatient: ${contactName}\nDate: ${dateStr}`;
     await this.sendToOwnerChannels(tenantId, 'booking', content, notifyConfig);
   }
 
-  /** Send notifications for an escalation event */
+  /** Send notifications for an escalation / handoff event */
   async notifyEscalation(
     tenantId: string,
     contactName: string,
@@ -92,9 +92,11 @@ export class NotificationService {
     const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.escalation) return;
 
-    const content = buildEscalationMessage(contactName, phone, reason, leadContext);
-
+    const content = buildHandoffMessage(contactName, phone, reason, leadContext);
     await this.sendToOwnerChannels(tenantId, 'escalation', content, notifyConfig);
+
+    // Also POST to TELEGRAM_BOT_WEBHOOK if configured (primary handoff channel)
+    await sendTelegramHandoff(content, phone, leadContext);
   }
 
   /** List notifications for a tenant */
@@ -109,20 +111,19 @@ export class NotificationService {
     });
   }
 
-  /** Route notification to all configured owner channels */
   private async sendToOwnerChannels(
     tenantId: string,
     type: NotificationType,
     content: string,
     notifyConfig: any,
   ): Promise<void> {
-    // WhatsApp notification to owner
-    if (notifyConfig.ownerPhone) {
+    // Telegram notification (primary)
+    if (notifyConfig.telegramChatId || env.TELEGRAM_CHAT_ID) {
       await this.notify({
         tenantId,
         type,
-        channel: 'whatsapp',
-        recipient: notifyConfig.ownerPhone,
+        channel: 'telegram',
+        recipient: notifyConfig.telegramChatId ?? env.TELEGRAM_CHAT_ID!,
         content,
       });
     }
@@ -152,10 +153,10 @@ export class NotificationService {
 }
 
 /**
- * Build a rich escalation message that includes lead qualification context
- * so the recipient (receptionist/sales rep) doesn't start from zero.
+ * Build a structured handoff message for the Telegram notification.
+ * This is what the practice staff sees when a lead is ready for follow-up.
  */
-function buildEscalationMessage(
+function buildHandoffMessage(
   contactName: string,
   phone: string,
   reason?: string,
@@ -163,80 +164,102 @@ function buildEscalationMessage(
 ): string {
   const lines: string[] = [];
 
-  lines.push('🔔 *Novo lead do Demo LK Digital*');
+  lines.push('🦷 *New Jedna Marketing Lead*');
   lines.push('');
 
-  // Identity
-  const name = contactName || leadContext?.extractedData?.nome || leadContext?.extractedData?.name;
-  if (name) lines.push(`*Nome:* ${name}`);
+  const name = contactName || leadContext?.extractedData?.name;
+  if (name) lines.push(`*Name:* ${name}`);
+  lines.push(`*Phone:* ${phone}`);
 
-  // How far they got in the demo
   const msgCount = leadContext?.messageCount;
   if (msgCount != null) {
-    const engagement = msgCount >= 6 ? 'Alto (percorreu o fluxo completo)' : msgCount >= 3 ? 'Médio' : 'Baixo (poucas mensagens)';
-    lines.push(`*Engajamento:* ${engagement} — ${msgCount} trocas de mensagem`);
+    const engagement = msgCount >= 6
+      ? 'High (completed full flow)'
+      : msgCount >= 3
+      ? 'Medium'
+      : 'Low (few messages)';
+    lines.push(`*Engagement:* ${engagement} — ${msgCount} exchanges`);
   }
 
-  // Extracted qualification data — skip internal fields and the __start__ trigger
   const data = leadContext?.extractedData ?? {};
-  const skipKeys = new Set(['_reasoning', 'source']);
+  const skipKeys = new Set(['_reasoning', 'source', 'auditReportSent']);
   const labelMap: Record<string, string> = {
-    nome: 'Nome',
-    name: 'Nome',
-    email: 'E-mail',
-    tratamento: 'Interesse',
-    servico: 'Serviço de interesse',
-    urgencia: 'Urgência',
-    paciente_novo: 'Paciente novo',
-    tipo_paciente: 'Tipo',
-    cadeiras: 'Cadeiras na clínica',
-    num_cadeiras: 'Cadeiras',
-    whatsapp_atual: 'Setup WhatsApp atual',
-    decisor: 'É o decisor',
-    is_owner: 'É o dono',
-    orcamento: 'Orçamento',
-    marketing_budget: 'Orçamento de marketing',
-    dor_principal: 'Principal dor',
-    contexto: 'Contexto',
-    tipo_lead: 'Tipo de visitante',
+    name: 'Name',
+    email: 'Email',
+    treatment_need: 'Treatment need',
+    timeline: 'Timeline',
+    preferred_day: 'Preferred day',
+    preferred_period: 'Preferred time',
+    prior_patient: 'Prior patient',
+    location_ok: 'Location OK',
+    current_situation: 'Current situation',
   };
 
   const qualLines: string[] = [];
   for (const [key, value] of Object.entries(data)) {
     if (skipKeys.has(key) || key.startsWith('_') || !value) continue;
-    if (typeof value === 'string' && value === '__start__') continue;
-    const label = labelMap[key] ?? key;
+    const label = labelMap[key] ?? key.replace(/_/g, ' ');
     qualLines.push(`• *${label}:* ${value}`);
   }
 
   if (qualLines.length > 0) {
     lines.push('');
-    lines.push('*Dados coletados no chat:*');
+    lines.push('*Collected in chat:*');
     lines.push(...qualLines);
   }
 
   if (reason) {
     lines.push('');
-    lines.push(`*Motivo do encaminhamento:* ${reason}`);
+    lines.push(`*Handoff reason:* ${reason}`);
   }
 
   lines.push('');
-  lines.push('_Responda a essa mensagem para iniciar o atendimento._');
+  lines.push('_Reply to this message to start the follow-up._');
 
   return lines.join('\n');
 }
 
 /**
- * Extract notification config from the correct tenant field.
- * Checks `notificationConfig` (the dedicated field) first,
- * then falls back to `aiConfig.notifications` for backward compatibility.
+ * POST the handoff payload directly to TELEGRAM_BOT_WEBHOOK.
+ * This is the primary notification path for practice staff.
  */
+async function sendTelegramHandoff(
+  message: string,
+  phone: string,
+  leadContext?: { extractedData?: Record<string, any> },
+): Promise<void> {
+  const webhookUrl = env.TELEGRAM_BOT_WEBHOOK;
+  if (!webhookUrl) return;
+
+  try {
+    const payload = {
+      event: 'lead_handoff',
+      timestamp: new Date().toISOString(),
+      phone,
+      message,
+      qualificationData: leadContext?.extractedData ?? {},
+    };
+
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      logger.warn({ status: res.status, webhookUrl }, 'Telegram handoff webhook returned non-OK status');
+    } else {
+      logger.info({ phone }, 'Handoff sent to Telegram webhook');
+    }
+  } catch (err) {
+    logger.error({ err, phone }, 'Failed to POST handoff to Telegram webhook');
+  }
+}
+
 function getNotifyConfig(tenant: any): any {
-  // Primary: dedicated notificationConfig column
   if (tenant.notificationConfig && typeof tenant.notificationConfig === 'object') {
     return tenant.notificationConfig;
   }
-  // Fallback: nested inside aiConfig (legacy)
   return (tenant.aiConfig as any)?.notifications ?? null;
 }
 

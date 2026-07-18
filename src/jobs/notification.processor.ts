@@ -1,33 +1,36 @@
-import crypto from 'crypto';
 import { Job } from 'bullmq';
 import axios from 'axios';
 import nodemailer from 'nodemailer';
 import { prisma } from '../config/database';
 import { logger } from '../utils/logger';
-import { sendMessage } from '../modules/whatsapp/message.sender';
+import { env } from '../config/env';
 
 interface NotificationJobData {
   notificationId: string;
   tenantId: string;
   type: string;
-  channel: 'whatsapp' | 'email' | 'webhook';
+  channel: 'telegram' | 'email' | 'webhook' | 'sms';
   recipient: string;
   content: string;
 }
 
 export async function notificationProcessor(job: Job<NotificationJobData>): Promise<void> {
-  const { notificationId, tenantId, channel, recipient, content } = job.data;
+  const { notificationId, channel, recipient, content } = job.data;
 
   try {
     switch (channel) {
-      case 'whatsapp':
-        await sendWhatsAppNotification(tenantId, recipient, content);
+      case 'telegram':
+        await sendTelegramNotification(recipient, content);
         break;
       case 'email':
         await sendEmailNotification(recipient, job.data.type, content);
         break;
       case 'webhook':
         await sendWebhookNotification(recipient, job.data);
+        break;
+      case 'sms':
+        // SMS notifications are not used for owner alerts (Telegram is primary)
+        logger.warn({ channel }, 'SMS notification channel not implemented for owner alerts');
         break;
     }
 
@@ -48,42 +51,23 @@ export async function notificationProcessor(job: Job<NotificationJobData>): Prom
   }
 }
 
-async function sendWhatsAppNotification(
-  tenantId: string,
-  phone: string,
-  content: string,
-): Promise<void> {
-  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-  if (!tenant?.evolutionInstanceId) {
-    throw new Error('Tenant has no Evolution instance');
+async function sendTelegramNotification(chatId: string, content: string): Promise<void> {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    logger.warn('Telegram notification skipped — TELEGRAM_BOT_TOKEN not set');
+    return;
   }
 
-  // Find or create a conversation for the owner notification
-  let conversation = await prisma.conversation.findFirst({
-    where: { tenantId, status: 'active' },
-    orderBy: { startedAt: 'desc' },
-  });
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  const res = await axios.post(url, {
+    chat_id: chatId,
+    text: content,
+    parse_mode: 'Markdown',
+  }, { timeout: 10000 });
 
-  if (!conversation) {
-    // Create a minimal contact + conversation for notifications
-    const contact = await prisma.contact.upsert({
-      where: { tenantId_phone: { tenantId, phone } },
-      update: {},
-      create: { id: crypto.randomUUID(), tenantId, phone, name: 'Business Owner', leadStatus: 'new' },
-    });
-
-    conversation = await prisma.conversation.create({
-      data: { id: crypto.randomUUID(), tenantId, contactId: contact.id, status: 'active' },
-    });
+  if (!res.data?.ok) {
+    throw new Error(`Telegram API returned ok=false: ${JSON.stringify(res.data)}`);
   }
-
-  await sendMessage({
-    tenantId,
-    conversationId: conversation.id,
-    instanceName: tenant.evolutionInstanceId,
-    phone,
-    text: `📋 *Notificação*\n\n${content}`,
-  });
 }
 
 async function sendEmailNotification(
@@ -109,16 +93,16 @@ async function sendEmailNotification(
   });
 
   const subjectMap: Record<string, string> = {
-    new_lead: 'Novo Lead Recebido',
-    booking: 'Novo Agendamento',
-    escalation: 'Atendimento Escalado',
-    daily_summary: 'Resumo Diário',
+    new_lead: 'New Lead Received',
+    booking: 'New Appointment Booked',
+    escalation: 'Lead Ready for Follow-Up',
+    daily_summary: 'Daily Practice Summary',
   };
 
   await transporter.sendMail({
     from: smtpUser,
     to,
-    subject: subjectMap[type] ?? 'Notificação',
+    subject: subjectMap[type] ?? 'Notification',
     text: content,
   });
 }

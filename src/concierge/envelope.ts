@@ -1,11 +1,11 @@
 // Strict JSON envelope parser for AI responses.
 // NEVER throws — a malformed response degrades safely to a human handoff.
 
-export type ConciergeAction = 'continuar' | 'agendar' | 'encaminhar' | 'desqualificar' | 'opt_out';
+export type ConciergeAction = 'continue' | 'book' | 'handoff' | 'disqualify' | 'opt_out';
 
 export type ConciergeStage =
-  | 'saudacao' | 'descoberta' | 'qualificacao' | 'valor'
-  | 'agendamento' | 'encaminhamento' | 'encerramento';
+  | 'greeting' | 'discovery' | 'qualifying' | 'value'
+  | 'booking' | 'handoff' | 'closing';
 
 export interface ConciergeEnvelope {
   reply: string;
@@ -15,7 +15,7 @@ export interface ConciergeEnvelope {
   handoff_reason: string | null;
   handoff_summary: string | null;
   compliance_flag: boolean;
-  // Extended fields from lk-chatbot's existing format (optional)
+  // Extended fields (optional)
   leadScore?: number;
   leadStatus?: string;
   qualificationReasoning?: string;
@@ -25,12 +25,12 @@ export interface ConciergeEnvelope {
 }
 
 const FALLBACK: ConciergeEnvelope = {
-  reply: 'Vou te conectar com nossa equipe, um instante :)',
-  stage: 'encaminhamento',
+  reply: "Let me connect you with our team — one moment.",
+  stage: 'handoff',
   qualification: {},
-  action: 'encaminhar',
+  action: 'handoff',
   handoff_reason: 'parse_error',
-  handoff_summary: 'Falha ao interpretar a resposta do assistente — encaminhado por seguranca.',
+  handoff_summary: 'Assistant response could not be parsed — routed to staff for safety.',
   compliance_flag: true,
 };
 
@@ -54,32 +54,49 @@ export function parseEnvelope(raw: string): ConciergeEnvelope {
   try {
     const obj = JSON.parse(text.slice(first, last + 1));
 
-    // Support both the new concierge envelope and the old lk-chatbot format
+    // Support both new concierge envelope and legacy format
     const reply = obj.reply ?? obj.replyText;
     if (typeof reply !== 'string') return { ...FALLBACK };
 
-    // Determine action from either format
-    let action: ConciergeAction = 'continuar';
+    // Determine action
+    let action: ConciergeAction = 'continue';
     if (obj.action && typeof obj.action === 'string') {
-      action = obj.action as ConciergeAction;
+      // Accept both new English names and legacy Portuguese names
+      const actionMap: Record<string, ConciergeAction> = {
+        continue: 'continue', continuar: 'continue',
+        book: 'book', agendar: 'book',
+        handoff: 'handoff', encaminhar: 'handoff',
+        disqualify: 'disqualify', desqualificar: 'disqualify',
+        opt_out: 'opt_out',
+      };
+      action = actionMap[obj.action] ?? 'continue';
     } else if (obj.shouldEscalate) {
-      action = 'encaminhar';
+      action = 'handoff';
     } else if (obj.nextState === 'closed' && obj.bookingDate) {
-      action = 'agendar';
+      action = 'book';
     }
 
-    // Map old-format nextState to concierge stage
-    let stage: ConciergeStage = obj.stage ?? 'descoberta';
-    if (!obj.stage && obj.nextState) {
-      const stateMap: Record<string, ConciergeStage> = {
-        greeting: 'saudacao',
-        qualifying: 'qualificacao',
-        qualified: 'valor',
-        booking: 'agendamento',
-        closed: 'encerramento',
-        awaiting_review: 'encerramento',
+    // Map stage names (accept both English and legacy Portuguese)
+    let stage: ConciergeStage = 'discovery';
+    const stageRaw = obj.stage ?? '';
+    const stageMap: Record<string, ConciergeStage> = {
+      greeting: 'greeting',    saudacao: 'greeting',
+      discovery: 'discovery',  descoberta: 'discovery',
+      qualifying: 'qualifying', qualificacao: 'qualifying',
+      value: 'value',          valor: 'value',
+      booking: 'booking',      agendamento: 'booking',
+      handoff: 'handoff',      encaminhamento: 'handoff',
+      closing: 'closing',      encerramento: 'closing',
+    };
+    if (stageRaw && stageMap[stageRaw]) {
+      stage = stageMap[stageRaw];
+    } else if (!stageRaw && obj.nextState) {
+      const nextStateMap: Record<string, ConciergeStage> = {
+        greeting: 'greeting', qualifying: 'qualifying',
+        qualified: 'value', booking: 'booking',
+        closed: 'closing', awaiting_review: 'closing',
       };
-      stage = stateMap[obj.nextState] ?? 'descoberta';
+      stage = nextStateMap[obj.nextState] ?? 'discovery';
     }
 
     return {
@@ -90,7 +107,6 @@ export function parseEnvelope(raw: string): ConciergeEnvelope {
       handoff_reason: obj.handoff_reason ?? null,
       handoff_summary: obj.handoff_summary ?? null,
       compliance_flag: Boolean(obj.compliance_flag),
-      // Carry through extended fields
       leadScore: obj.leadScore ?? undefined,
       leadStatus: obj.leadStatus ?? undefined,
       qualificationReasoning: obj.qualificationReasoning ?? undefined,

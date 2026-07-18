@@ -18,40 +18,40 @@ export function buildQualificationPrompt(input: QualificationInput): string {
             const label =
               typeof c === 'string' ? c : c.label ?? c.name ?? JSON.stringify(c);
             const weight =
-              typeof c === 'object' && c.weight ? ` (peso: ${c.weight})` : '';
+              typeof c === 'object' && c.weight ? ` (weight: ${c.weight})` : '';
             return `${i + 1}. ${label}${weight}`;
           })
           .join('\n')
-      : '1. Necessidade clara\n2. Prazo/urgência\n3. Poder de decisão\n4. Orçamento';
+      : '1. Clear treatment need\n2. Timeline / urgency\n3. Decision-making authority\n4. Location fit';
 
-  return `Você é um especialista em qualificação de leads para a empresa ${input.businessName}.
+  return `You are a dental patient reactivation specialist evaluating a lead for ${input.businessName}.
 
-## Dados coletados sobre o contato ${input.contactName ?? '(nome desconhecido)'}:
+## Collected data about contact ${input.contactName ?? '(name unknown)'}:
 ${JSON.stringify(input.extractedData, null, 2)}
 
-## Resumo da conversa:
+## Conversation summary:
 ${input.conversationSummary}
 
-## Critérios de qualificação:
+## Qualification criteria:
 ${criteriaList}
 
-## Tarefa:
-Avalie este lead com base nos critérios acima e retorne um JSON:
+## Task:
+Evaluate this lead based on the criteria above and return a JSON object:
 
 \`\`\`json
 {
-  "leadScore": <número 0-100>,
+  "leadScore": <number 0-100>,
   "leadStatus": "<qualified|lost>",
-  "reasoning": "<explicação em português de 2-3 frases>",
-  "missingInfo": ["<dados que ainda faltam, se houver>"]
+  "reasoning": "<2-3 sentence explanation in English>",
+  "missingInfo": ["<any data still needed, if any>"]
 }
 \`\`\`
 
-Diretrizes de pontuação:
-- 80-100: Lead quente, atende maioria dos critérios, urgência alta
-- 60-79: Lead morno, atende alguns critérios, potencial
-- 30-59: Lead frio, poucos critérios atendidos
-- 0-29: Não é fit, desqualificado
+Scoring guidelines:
+- 80-100: Hot lead — meets most criteria, high urgency, ready to book
+- 60-79: Warm lead — meets some criteria, potential with follow-up
+- 30-59: Cold lead — few criteria met, may need nurturing
+- 0-29: Not a fit — disqualified
 
-Responda APENAS com o bloco JSON.`;
+Respond ONLY with the JSON block.`;
 }

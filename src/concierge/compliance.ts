@@ -1,18 +1,28 @@
-// CFO/CRO compliance gate. Runs on EVERY outbound reply before it is sent.
-// Prohibited patterns => block the generated text, swap a safe line, force handoff.
+// TCPA / dental board compliance gate. Runs on EVERY outbound SMS reply before it is sent.
+// Prohibited patterns => block the generated text, swap a safe handoff line, force handoff.
 // Every outbound (passed or blocked) is logged to compliance_audit table.
 
 const PROHIBITED: { label: string; re: RegExp }[] = [
-  { label: 'garantia', re: /\bgarant\w*/i },
-  { label: 'cura_garantida', re: /cura\s+garantid/i },
-  { label: 'cem_por_cento', re: /\b100\s*%/ },
-  { label: 'superlativo_melhor', re: /\bmelhor\s+(cl[ií]nica|dentista|pre[cç]o)/i },
-  { label: 'barato', re: /\bbarat\w*/i },
-  { label: 'desconto', re: /\bdesconto\w*/i },
-  { label: 'promocao', re: /\bpromo[cç]\w*/i },
-  { label: 'preco_tratamento', re: /R\$\s?\d/ },
-  { label: 'sem_dor_garantida', re: /sem\s+dor\s+garantid/i },
-  { label: 'numero_um', re: /\bn[uú]mero\s*1\b|\bn[ºo]\s*1\b/i },
+  // Price / fee discussion (redirect to practice)
+  { label: 'price_dollar', re: /\$\s?\d/ },
+  { label: 'price_words', re: /\b(how much|the cost is|fee is|pricing is|charge you|payment plan|costs \$)\b/i },
+
+  // Treatment outcome guarantees — dental board violations
+  { label: 'guarantee', re: /\bguarantee\b/i },
+  { label: 'guaranteed_results', re: /guaranteed\s+(results|outcome|success|pain.?free)/i },
+  { label: 'pain_free_guarantee', re: /pain.?free\s+guaranteed/i },
+  { label: 'cure', re: /\bcure\s+(your|the|this)\b/i },
+  { label: '100_percent', re: /\b100\s*%\s*(success|effective|guaranteed)/i },
+
+  // Superlative / best-in-class claims
+  { label: 'best_dentist', re: /\bbest\s+(dentist|dental\s+practice|dental\s+office|orthodontist)\b/i },
+  { label: 'number_one', re: /\b(#\s*1|number\s*one|no\.\s*1)\s+(dentist|dental|provider)\b/i },
+
+  // Emergency urgency manipulation
+  { label: 'emergency_bait', re: /you\s+(must|need to|have to)\s+(call|come in|book)\s+(right now|immediately|today or)/i },
+
+  // HIPAA-adjacent: never reference specific health conditions in outbound SMS
+  { label: 'diagnosis', re: /\b(you have|you've been diagnosed|your condition is|your x-ray shows)\b/i },
 ];
 
 export interface ComplianceResult {
@@ -22,7 +32,7 @@ export interface ComplianceResult {
 }
 
 export const SAFE_HANDOFF_REPLY =
-  'Vou te conectar com nossa equipe, um instante :)';
+  "Let me connect you with our team — they'll be able to help you with that directly.";
 
 /**
  * Evaluate a reply against prohibited patterns.

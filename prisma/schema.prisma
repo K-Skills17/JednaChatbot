@@ -12,9 +12,9 @@ datasource db {
 model Tenant {
   id                  String   @id @default(uuid())
   businessName        String   @map("business_name")
-  whatsappNumber      String?  @unique @map("whatsapp_number")
-  evolutionInstanceId String?  @map("evolution_instance_id")
-  timezone            String   @default("America/Sao_Paulo")
+  smsNumber           String?  @unique @map("sms_number")           // A2P 10DLC registered Twilio number
+  evolutionInstanceId String?  @map("evolution_instance_id")        // Kept for webchat widget backend only
+  timezone            String   @default("America/New_York")
   businessHours       Json     @map("business_hours")
   aiConfig            Json     @map("ai_config")
   bookingConfig       Json?    @map("booking_config")
@@ -32,12 +32,12 @@ model Tenant {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  // Concierge-specific fields (dental/medical compliance)
+  // Concierge-specific fields (dental compliance / US market)
   qualificationRules Json?    @map("qualification_rules") // { weights, near_term_keywords, qualified_threshold }
-  handoffNumber      String?  @map("handoff_number")       // WhatsApp number for clinic staff notifications
-  assessmentDesc     String?  @map("assessment_desc")      // Description of the evaluation/consultation
+  handoffNumber      String?  @map("handoff_number")       // Staff notification number / Telegram chat ID
+  assessmentDesc     String?  @map("assessment_desc")      // Description of the reactivation audit
   toneNotes          String?  @map("tone_notes")           // Extra tone guidance for the AI
-  complianceEnabled  Boolean  @default(false) @map("compliance_enabled") // Enable CFO/CRO compliance gate
+  complianceEnabled  Boolean  @default(true) @map("compliance_enabled")  // Always true for dental TCPA
 
   contacts        Contact[]
   conversations   Conversation[]
@@ -120,7 +120,7 @@ model Contact {
   phone             String
   name              String?
   email             String?
-  channel           String    @default("whatsapp") // whatsapp, web
+  channel           String    @default("sms") // sms, web
   leadScore         Int       @default(0) @map("lead_score")
   leadStatus        String    @default("new") @map("lead_status") // new, qualifying, qualified, booked, lost
   qualificationData Json?     @map("qualification_data")
@@ -129,6 +129,7 @@ model Contact {
   lastContactAt     DateTime? @map("last_contact_at")
   optedOut          Boolean   @default(false) @map("opted_out")
   optedOutAt        DateTime? @map("opted_out_at")
+  smsConsentAt      DateTime? @map("sms_consent_at")  // When contact provided SMS consent
   createdAt         DateTime  @default(now()) @map("created_at")
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -149,9 +150,9 @@ model Conversation {
   id            String    @id @default(uuid())
   tenantId      String    @map("tenant_id")
   contactId     String    @map("contact_id")
-  channel       String    @default("whatsapp") // whatsapp, web
+  channel       String    @default("sms") // sms, web
   status        String    @default("active") // active, paused, closed, escalated
-  stage         String    @default("saudacao") // saudacao, descoberta, qualificacao, valor, agendamento, encaminhamento, encerramento
+  stage         String    @default("greeting") // greeting, discovery, qualifying, value, booking, handoff, closing
   context       Json?     // AI conversation summary/context
   startedAt     DateTime  @default(now()) @map("started_at")
   lastMessageAt DateTime? @map("last_message_at")
@@ -176,7 +177,7 @@ model Message {
   messageType        String   @map("message_type") // text, image, audio, document, interactive
   content            String?
   mediaUrl           String?  @map("media_url")
-  whatsappMessageId  String?  @map("whatsapp_message_id")
+  externalMessageId  String?  @map("external_message_id")  // Twilio SID or webchat message ID
   aiModelUsed        String?  @map("ai_model_used")
   aiTokensUsed       Int?     @map("ai_tokens_used")
   aiCostUsd          Float?   @map("ai_cost_usd")
@@ -188,7 +189,7 @@ model Message {
 
   complianceAudits ComplianceAudit[]
 
-  @@unique([whatsappMessageId])
+  @@unique([externalMessageId])
   @@index([conversationId, createdAt])
   @@map("messages")
 }
@@ -201,10 +202,10 @@ model Booking {
   contactId       String   @map("contact_id")
   appointmentType String?  @map("appointment_type")
   scheduledAt      DateTime? @map("scheduled_at")
-  preferredDay     String?   @map("preferred_day")     // e.g. "segunda", "terça", "2026-06-01"
-  preferredPeriod  String?   @map("preferred_period")  // e.g. "manha", "tarde", "noite"
+  preferredDay     String?   @map("preferred_day")     // e.g. "Monday", "Tuesday", "2026-06-01"
+  preferredPeriod  String?   @map("preferred_period")  // e.g. "morning", "afternoon", "evening"
   durationMinutes  Int       @default(30) @map("duration_minutes")
-  status           String    @default("confirmed") // confirmed, cancelled, completed, no_show, solicitado
+  status           String    @default("confirmed") // confirmed, cancelled, completed, no_show, requested
   calendarEventId String?  @map("calendar_event_id")
   meetLink        String?  @map("meet_link")
   reminderSent    Boolean  @default(false) @map("reminder_sent")
@@ -219,7 +220,7 @@ model Booking {
   @@map("bookings")
 }
 
-// ─── Campaigns (Cold Outreach) ───────────────────────────────
+// ─── Campaigns (Cold Outreach / Reactivation) ────────────────
 
 model Campaign {
   id              String    @id @default(uuid())
@@ -263,7 +264,7 @@ model Notification {
   id        String    @id @default(uuid())
   tenantId  String    @map("tenant_id")
   type      String    // new_lead, booking, escalation, daily_summary
-  channel   String    // whatsapp, email, webhook
+  channel   String    // telegram, email, webhook, sms
   recipient String
   content   String?
   status    String    @default("pending") // pending, sent, failed
@@ -306,7 +307,7 @@ model Invoice {
   stripeInvoiceId  String    @unique @map("stripe_invoice_id")
   amountDue        Int       @map("amount_due")       // in cents
   amountPaid       Int       @default(0) @map("amount_paid")  // in cents
-  currency         String    @default("brl")
+  currency         String    @default("usd")
   status           String    // draft, open, paid, void, uncollectible
   invoiceUrl       String?   @map("invoice_url")
   invoicePdf       String?   @map("invoice_pdf")
@@ -331,7 +332,7 @@ model Review {
   rating          Int?      // 1-5 stars
   comment         String?
   status          String    @default("pending") // pending, sent, responded, expired
-  reviewLink      String?   @map("review_link") // Google/Facebook review URL
+  reviewLink      String?   @map("review_link") // Google/Healthgrades review URL
   requestSentAt   DateTime? @map("request_sent_at")
   respondedAt     DateTime? @map("responded_at")
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -344,7 +345,7 @@ model Review {
   @@map("reviews")
 }
 
-// ─── Compliance Audit (CFO/CRO Gate) ──────────────────────────
+// ─── Compliance Audit (TCPA Gate) ─────────────────────────────
 
 model ComplianceAudit {
   id             String   @id @default(uuid())
@@ -373,9 +374,9 @@ model Handoff {
   leadId         String   @map("lead_id")
   conversationId String   @map("conversation_id")
   tenantId       String   @map("tenant_id")
-  reason         String?  // agendamento, compliance, emergencia, user_request, etc.
+  reason         String?  // booking, compliance, emergency, user_request, qualified
   summary        String?
-  status         String   @default("pendente") // pendente, atendido, encerrado
+  status         String   @default("pending") // pending, attended, closed
   createdAt      DateTime @default(now()) @map("created_at")
 
   contact      Contact      @relation(fields: [leadId], references: [id], onDelete: Cascade)
@@ -392,7 +393,7 @@ model Event {
   id        String   @id @default(uuid())
   leadId    String?  @map("lead_id")
   tenantId  String   @map("tenant_id")
-  type      String   // message_in, lead_in, message_out, agendar, encaminhar, desqualificar, opt_out, continuar
+  type      String   // message_in, lead_in, message_out, book, handoff, disqualify, opt_out, continue
   payload   Json?
   createdAt DateTime @default(now()) @map("created_at")
 

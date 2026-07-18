@@ -42,14 +42,17 @@ export function isWithinBusinessHours(
   return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
 }
 
-/** Format a date for display in Brazilian Portuguese */
-export function formatDatePtBr(date: Date, tz: string): string {
-  return date.toLocaleDateString('pt-BR', {
+/** Format a date for display in US English */
+export function formatDateEnUs(date: Date, tz: string): string {
+  return date.toLocaleDateString('en-US', {
     timeZone: tz,
     weekday: 'long',
-    day: '2-digit',
-    month: '2-digit',
+    month: 'long',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
 }
+
+/** @deprecated Use formatDateEnUs instead */
+export const formatDatePtBr = formatDateEnUs;

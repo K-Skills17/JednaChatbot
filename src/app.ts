@@ -11,6 +11,7 @@ import { registerCampaignRoutes } from './modules/campaign/campaign.routes';
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes';
 import { registerTrainingRoutes } from './modules/training/training.routes';
 import { registerWebhookRoutes } from './modules/whatsapp/webhook.handler';
+import { registerSmsWebhookRoutes } from './modules/sms/webhook.handler';
 import { registerFacebookWebhookRoutes } from './modules/facebook/facebook.webhook';
 import { registerAuditLeadRoutes } from './modules/whatsapp/audit-lead.handler';
 import { registerBillingRoutes } from './modules/billing/billing.routes';
@@ -28,6 +29,7 @@ import { evolutionConfig } from './config/evolution';
 import { prisma } from './config/database';
 import { redis } from './config/redis';
 import { evolutionClient } from './modules/whatsapp/evolution.client';
+import { twilioClient } from './modules/sms/twilio.client';
 import { dashboardHtml } from './views/dashboard';
 
 export async function buildApp() {
@@ -152,7 +154,20 @@ export async function buildApp() {
       checks.redis = 'skipped';
     }
 
-    // Evolution API check (lightweight — 5s timeout, hits root endpoint)
+    // Twilio SMS check
+    if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN) {
+      const twilioHealth = await twilioClient.healthCheck();
+      if (twilioHealth.ok) {
+        checks.twilio = 'ok';
+      } else {
+        checks.twilio = 'error';
+        errors.twilio = twilioHealth.detail;
+      }
+    } else {
+      checks.twilio = 'skipped';
+    }
+
+    // Evolution API check (webchat widget backend only)
     if (env.EVOLUTION_API_URL) {
       const evoHealth = await evolutionClient.healthCheck();
       if (evoHealth.ok) {
@@ -165,7 +180,7 @@ export async function buildApp() {
       checks.evolution = 'skipped';
     }
 
-    // Database is required; Redis and Evolution are optional services
+    // Database is required; Redis, Twilio, and Evolution are optional services
     const coreOk = checks.database === 'ok' || checks.database === 'skipped';
     const allOk = Object.values(checks).every((v) => v === 'ok' || v === 'skipped');
     const status = !coreOk ? 'degraded' : allOk ? 'ready' : 'ready_with_warnings';
@@ -175,11 +190,12 @@ export async function buildApp() {
       checks,
       ...(Object.keys(errors).length > 0 ? { errors } : {}),
       config: {
-        webhookUrl: evolutionConfig.webhookUrl,
+        smsFrom: env.TWILIO_FROM_NUMBER || 'not set',
+        twilioConfigured: !!(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN),
         evolutionUrl: evolutionConfig.baseUrl || 'not set',
-        evolutionUrlRaw: env.EVOLUTION_API_URL || 'not set',
         redisUrl: env.REDIS_URL ? env.REDIS_URL.replace(/\/\/.*@/, '//***@') : 'not set',
         aiProvider: env.AI_PRIMARY_PROVIDER,
+        practiceName: env.PRACTICE_NAME || 'not set',
       },
     });
   });
@@ -258,7 +274,7 @@ export async function buildApp() {
         },
       });
       return reply.type('text/html').send(
-        '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h1>✅ Google Calendar conectado!</h1><p>Você pode fechar esta janela.</p></body></html>'
+        '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h1>Google Calendar connected!</h1><p>You may close this window.</p></body></html>'
       );
     } catch (err: any) {
       return reply.code(500).send({ error: 'Failed to exchange token', detail: err?.message });
@@ -268,6 +284,7 @@ export async function buildApp() {
   // ─── Routes (each wrapped in register() for hook encapsulation) ───
 
   app.register(async (instance) => registerWebhookRoutes(instance));
+  app.register(async (instance) => registerSmsWebhookRoutes(instance));
   app.register(async (instance) => registerFacebookWebhookRoutes(instance));
   app.register(async (instance) => registerAuditLeadRoutes(instance));
   app.register(async (instance) => registerTenantRoutes(instance));
