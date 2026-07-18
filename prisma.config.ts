@@ -7,7 +7,7 @@ import { defineConfig } from "prisma/config";
 // tables live in a separate PostgreSQL schema from Evolution API's "public".
 const baseUrl = process.env["DATABASE_URL"] ?? "";
 const separator = baseUrl.includes("?") ? "&" : "?";
-const url = baseUrl ? `${baseUrl}${separator}schema=lk_chatbot` : baseUrl;
+const url = baseUrl ? `${baseUrl}${separator}schema=jedna_chatbot` : baseUrl;
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

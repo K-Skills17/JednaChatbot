@@ -17,10 +17,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const dbUrl = process.env.DATABASE_URL ?? '';
-const sep = dbUrl.includes('?') ? '&' : '?';
-const url = `${dbUrl}${sep}schema=jedna_chatbot`;
-const pool = new Pool({ connectionString: url });
-const adapter = new PrismaPg(pool, { schema: 'jedna_chatbot' });
+const pool = new Pool({ connectionString: dbUrl });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 const BUSINESS_NAME = 'Jedna LLC';

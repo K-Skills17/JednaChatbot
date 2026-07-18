@@ -23,7 +23,13 @@
     "type": "git",
     "url": "https://github.com/K-Skills17/JednaChatbot.git"
   },
-  "keywords": ["dental", "sms", "chatbot", "reactivation", "tcpa"],
+  "keywords": [
+    "dental",
+    "sms",
+    "chatbot",
+    "reactivation",
+    "tcpa"
+  ],
   "author": "Jedna Marketing",
   "license": "ISC",
   "engines": {
@@ -35,6 +41,7 @@
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/static": "^9.0.0",
+    "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^6.19.3",
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
@@ -46,6 +53,7 @@
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.1",
     "openai": "^6.21.0",
+    "pg": "^8.22.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",
     "prisma": "^6.19.3",
