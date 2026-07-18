@@ -9,7 +9,7 @@
  * If a tenant with businessName matching PRACTICE_NAME already exists,
  * it updates the aiConfig and smsNumber (if changed).
  */
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';

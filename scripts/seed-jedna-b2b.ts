@@ -9,7 +9,7 @@
  *   npx tsx scripts/seed-jedna-b2b.ts                    # uses JEDNA_SMS_NUMBER from .env
  *   npx tsx scripts/seed-jedna-b2b.ts +15555550101       # pass SMS number as argument
  */
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';

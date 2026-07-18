@@ -2,7 +2,7 @@
  * One-off script to add widgetConfig to the existing LK tenant.
  * Run with: npx tsx scripts/update-widget-config.ts
  */
-import { PrismaClient } from '../src/generated/prisma';
+import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 
 dotenv.config();

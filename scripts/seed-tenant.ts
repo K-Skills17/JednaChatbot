@@ -17,7 +17,7 @@
  * - Guarantee-based risk reversal
  * - Referral loop integration
  */
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';

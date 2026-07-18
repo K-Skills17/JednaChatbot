@@ -2,7 +2,7 @@
  * One-time script to add facebookPageId to the tenant's aiConfig.
  * Run with: npx tsx scripts/add-facebook-page-id.ts
  */
-import { PrismaClient } from '../src/generated/prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
