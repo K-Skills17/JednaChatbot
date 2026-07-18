@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "prisma generate && prisma db push --skip-generate && tsc && npm run build:portal",
+    "build": "prisma generate && tsc && npm run build:portal",
     "build:portal": "cd client && npm install && npm run build",
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
