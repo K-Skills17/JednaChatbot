@@ -163,18 +163,57 @@ If you want the embeddable chat widget on your website:
 
 ---
 
-## 10. HIPAA Compliance
+## 10. HIPAA / Privacy — PHI-Free Design
 
 > **This is not legal advice.** Consult your healthcare compliance officer or attorney.
 
-- Sign a Business Associate Agreement (BAA) with Anthropic (if using Claude for PHI-adjacent workflows)
-- Sign a BAA with Twilio (available in their compliance portal)
-- Ensure your PostgreSQL host offers a BAA (Railway Pro, AWS RDS, etc.)
-- Enable encryption at rest on your database
-- Review and limit which staff have access to conversation logs
-- The bot is designed to **never ask for PHI** (SSN, insurance ID, full DOB, etc.).
-  PHI redaction is applied to message history before it reaches the AI, but the raw
-  messages are stored in the database — ensure DB access is appropriately restricted.
+### Why we don't need Twilio Security Edition or Anthropic Enterprise
+
+Twilio Security/Enterprise Edition and Anthropic Enterprise are priced for large health
+systems — typically thousands of dollars per month.  A single-practice pilot doesn't need
+them, because **this bot is architected to never touch PHI in the first place.**
+
+### What the bot collects
+
+| Data | Example | PHI? |
+|------|---------|------|
+| First name | "Maria" | No |
+| Cell phone | "+15555550100" | No (under most interpretations) |
+| Treatment interest | "interested in implants" | No |
+| Preferred day/time | "Monday mornings" | No |
+
+That's it.  The bot qualifies the lead, then hands them a Calendly link.  Everything that
+would involve PHI — medical history, insurance, SSN, DOB, treatment records — happens
+inside Calendly and the practice's own EHR, both of which the practice already manages
+under their existing HIPAA obligations.
+
+### What this means in practice
+
+- **Standard Twilio account** (Pay-as-you-go or Starter) is sufficient.  No BAA required
+  from Twilio for a bot that never transmits PHI.
+- **Standard Anthropic API** is sufficient.  No Enterprise contract required.  The bot
+  sends "interested in implants, prefers Mondays" to Claude — not medical records.
+- **PHI redaction in code** (`src/utils/phi-redact.ts`) is a safety net for the rare case
+  a patient volunteers a SSN or DOB mid-chat.  It protects against accidental exposure;
+  it is not the compliance architecture.
+- **Database**: The conversation logs store lead name + phone + treatment interest.
+  That is marketing data, not a medical record.  Standard-tier Railway Postgres is fine.
+  Enable encryption at rest (Railway does this by default) and restrict DB access to
+  practice staff as a matter of good hygiene.
+
+### The one thing to watch
+
+Do not change the bot's prompt or training to collect insurance IDs, diagnosis details,
+medication lists, or any other HIPAA-defined PHI.  If a future feature requires PHI
+(e.g., pre-filling intake forms), that integration must be scoped separately with
+appropriate BAA coverage at that point.
+
+### Practical checklist
+
+- [ ] Confirm Calendly is the handoff point — no PHI flows through SMS
+- [ ] Review bot responses to ensure they never prompt for PHI
+- [ ] Restrict database access to practice staff only
+- [ ] Brief the practice: "the SMS bot is a scheduling assistant, not a clinical tool"
 
 ---
 
