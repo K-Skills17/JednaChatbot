@@ -1,6 +1,6 @@
 {
   "name": "jedna-chatbot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Jedna Marketing — US dental lead qualification and reactivation chatbot (SMS + webchat)",
   "main": "dist/server.js",
   "scripts": {
