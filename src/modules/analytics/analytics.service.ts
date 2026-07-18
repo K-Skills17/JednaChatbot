@@ -90,37 +90,31 @@ export class AnalyticsService {
     since.setHours(0, 0, 0, 0);
 
     // Get daily new contacts
-    const newContacts = await prisma.$queryRawUnsafe<
-      { date: string; count: bigint }[]
-    >(
+    const newContacts = (await prisma.$queryRawUnsafe(
       `SELECT DATE(first_contact_at) as date, COUNT(*) as count
        FROM contacts WHERE tenant_id = $1 AND first_contact_at >= $2
        GROUP BY DATE(first_contact_at) ORDER BY date`,
       tenantId,
       since,
-    );
+    )) as { date: string; count: bigint }[];
 
     // Get daily messages
-    const messages = await prisma.$queryRawUnsafe<
-      { date: string; direction: string; count: bigint }[]
-    >(
+    const messages = (await prisma.$queryRawUnsafe(
       `SELECT DATE(created_at) as date, direction, COUNT(*) as count
        FROM messages WHERE tenant_id = $1 AND created_at >= $2
        GROUP BY DATE(created_at), direction ORDER BY date`,
       tenantId,
       since,
-    );
+    )) as { date: string; direction: string; count: bigint }[];
 
     // Get daily bookings
-    const bookingsByDay = await prisma.$queryRawUnsafe<
-      { date: string; count: bigint }[]
-    >(
+    const bookingsByDay = (await prisma.$queryRawUnsafe(
       `SELECT DATE(created_at) as date, COUNT(*) as count
        FROM bookings WHERE tenant_id = $1 AND created_at >= $2
        GROUP BY DATE(created_at) ORDER BY date`,
       tenantId,
       since,
-    );
+    )) as { date: string; count: bigint }[];
 
     // Build day-by-day map
     const metrics: Record<string, DailyMetric> = {};
