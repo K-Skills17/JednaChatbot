@@ -20,7 +20,7 @@ export class TenantService {
       }
 
       // Prevent duplicate tenants with the same phone number
-      const existing = await prisma.tenant.findUnique({ where: { whatsappNumber: normalizedPhone } });
+      const existing = await prisma.tenant.findFirst({ where: { smsNumber: normalizedPhone } });
       if (existing) {
         throw new Error(`A tenant with phone number ${normalizedPhone} already exists (${existing.businessName})`);
       }
@@ -34,7 +34,7 @@ export class TenantService {
       data: {
         id: crypto.randomUUID(),
         businessName: input.businessName,
-        whatsappNumber: normalizedPhone,
+        smsNumber: normalizedPhone,
         evolutionInstanceId: instanceName,
         timezone: input.timezone,
         businessHours: input.businessHours,

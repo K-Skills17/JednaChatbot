@@ -175,7 +175,7 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
     }
   }
 
-  // Store inbound message (deduplicate by whatsappMessageId unique index)
+  // Store inbound message (deduplicate by externalMessageId unique index)
   try {
     await prisma.message.create({
       data: {
@@ -185,13 +185,13 @@ async function handleIncomingMessage(instanceName: string, data: MessageData): P
         direction: 'inbound',
         messageType,
         content: text,
-        whatsappMessageId: data.key.id,
+        externalMessageId: data.key.id,
       },
     });
   } catch (err: any) {
     // Unique constraint violation = duplicate webhook delivery
     if (err?.code === 'P2002') {
-      logger.debug({ whatsappMessageId: data.key.id }, 'Duplicate message ignored (unique constraint)');
+      logger.debug({ externalMessageId: data.key.id }, 'Duplicate message ignored (unique constraint)');
       return;
     }
     throw err;
@@ -301,7 +301,7 @@ async function handleHumanOperatorMessage(instanceName: string, data: MessageDat
       direction: 'outbound',
       messageType: text ? 'text' : 'unknown',
       content: text,
-      whatsappMessageId: data.key.id,
+      externalMessageId: data.key.id,
       status: 'sent',
     },
   });
@@ -326,7 +326,7 @@ async function handleMessageStatusUpdate(instanceName: string, data: any): Promi
     if (!newStatus) return;
 
     await prisma.message.updateMany({
-      where: { whatsappMessageId: data.key.id },
+      where: { externalMessageId: data.key.id },
       data: { status: newStatus },
     });
   }

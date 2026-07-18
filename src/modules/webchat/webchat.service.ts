@@ -205,7 +205,7 @@ export async function processWebMessage(
     extractedData: envelope.qualification as any,
     leadScore: undefined,
     leadStatus: undefined,
-    shouldEscalate: envelope.action === 'encaminhar',
+    shouldEscalate: envelope.action === 'handoff',
     bookingDate: envelope.bookingDate,
     bookingTime: envelope.bookingTime,
   };
@@ -222,7 +222,7 @@ export async function processWebMessage(
 
   // Create booking if AI confirmed a date/time
   const action = envelope.action;
-  if (action === 'agendar' && envelope.bookingDate && envelope.bookingTime) {
+  if (action === 'book' && envelope.bookingDate && envelope.bookingTime) {
     try {
       const scheduledAt = parseBookingDateTime(envelope.bookingDate, envelope.bookingTime, tenant.timezone);
       if (scheduledAt) {
