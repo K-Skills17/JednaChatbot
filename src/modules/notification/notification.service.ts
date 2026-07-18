@@ -164,7 +164,7 @@ function buildHandoffMessage(
 ): string {
   const lines: string[] = [];
 
-  lines.push('🦷 *New Jedna Marketing Lead*');
+  lines.push('🦷 *New Jedna LLC Lead*');
   lines.push('');
 
   const name = contactName || leadContext?.extractedData?.name;

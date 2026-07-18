@@ -175,7 +175,7 @@ export function getWidgetScript(tenantId: string, baseUrl: string): string {
         <input id="jedna-chat-input" type="text" placeholder="Type your message..." autocomplete="off" />
         <button id="jedna-chat-send" disabled>Send</button>
       </div>
-      <div id="jedna-chat-powered">Powered by <a href="https://jednamarketing.com" target="_blank" rel="noopener">Jedna Marketing</a></div>
+      <div id="jedna-chat-powered">Powered by <a href="https://jednamarketing.com" target="_blank" rel="noopener">Jedna LLC</a></div>
     \`;
     document.body.appendChild(win);
 

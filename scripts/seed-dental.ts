@@ -1,5 +1,5 @@
 /**
- * Seed script — creates/updates a Jedna Marketing dental practice tenant.
+ * Seed script — creates/updates a Jedna LLC dental practice tenant.
  *
  * Usage:
  *   npx tsx scripts/seed-dental.ts                         # uses SMS_NUMBER from .env or default

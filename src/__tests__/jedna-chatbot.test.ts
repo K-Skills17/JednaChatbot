@@ -1,5 +1,5 @@
 /**
- * Acceptance tests for the Jedna Marketing dental lead-qualification bot.
+ * Acceptance tests for the Jedna LLC dental lead-qualification bot.
  *
  * These tests verify the core behavioral requirements without hitting external
  * APIs (Twilio, Claude, DB).  They exercise pure functions replicated from the

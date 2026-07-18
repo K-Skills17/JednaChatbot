@@ -1,4 +1,4 @@
-# NEEDS-OWNER — Jedna Marketing Dental Bot
+# NEEDS-OWNER — Jedna LLC Dental Bot
 
 This file lists every configuration step that **must be completed by the practice owner
 or implementation engineer** before the bot goes live.  Nothing here is handled by code;

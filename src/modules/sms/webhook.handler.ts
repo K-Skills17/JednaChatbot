@@ -122,7 +122,7 @@ async function handleHelp(phone: string, reply: FastifyReply): Promise<void> {
   // CTIA-required HELP response
   return sendTwimlReply(
     reply,
-    'Jedna Marketing patient outreach. Msg&data rates may apply. Reply STOP to unsubscribe. For help call {{PRACTICE_PHONE}} or visit {{PRACTICE_URL}}.',
+    'Jedna LLC patient outreach. Msg&data rates may apply. Reply STOP to unsubscribe. For help call {{PRACTICE_PHONE}} or visit {{PRACTICE_URL}}.',
   );
 }
 
