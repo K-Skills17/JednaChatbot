@@ -15,6 +15,7 @@ export function registerWebChatRoutes(app: FastifyInstance): void {
     return reply
       .type('application/javascript')
       .header('Cache-Control', 'public, max-age=300')
+      .header('Cross-Origin-Resource-Policy', 'cross-origin')
       .send(script);
   });
 

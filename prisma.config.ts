@@ -3,11 +3,8 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-// Append ?schema=lk_chatbot (or &schema= if query params exist) so our
-// tables live in a separate PostgreSQL schema from Evolution API's "public".
-const baseUrl = process.env["DATABASE_URL"] ?? "";
-const separator = baseUrl.includes("?") ? "&" : "?";
-const url = baseUrl ? `${baseUrl}${separator}schema=jedna_chatbot` : baseUrl;
+// Railway has a dedicated Postgres instance — use public schema directly.
+const url = process.env["DATABASE_URL"] ?? "";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
