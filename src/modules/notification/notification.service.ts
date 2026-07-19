@@ -47,7 +47,7 @@ export class NotificationService {
     tenantId: string,
     contactName: string,
     phone: string,
-    extra?: { email?: string; problem?: string },
+    extra?: { email?: string; phone?: string; practiceName?: string; problem?: string },
   ): Promise<void> {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return;
@@ -55,11 +55,13 @@ export class NotificationService {
     const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.newLead) return;
 
-    const lines = [`🔔 New web lead: ${contactName || 'Unknown'}`];
-    if (extra?.email) lines.push(`📧 Email: ${extra.email}`);
-    if (phone && !phone.startsWith('web-')) lines.push(`📱 Phone: ${phone}`);
-    if (extra?.problem) lines.push(`💬 Problem: ${extra.problem}`);
-    lines.push(`📅 Sent booking link`);
+    const displayPhone = extra?.phone ?? (phone.startsWith('web-') ? null : phone);
+    const lines = [`🔔 New lead: ${contactName || 'Unknown'}`];
+    if (extra?.practiceName) lines.push(`🏥 Practice: ${extra.practiceName}`);
+    if (extra?.email) lines.push(`📧 ${extra.email}`);
+    if (displayPhone) lines.push(`📱 ${displayPhone}`);
+    if (extra?.problem) lines.push(`💬 "${extra.problem}"`);
+    lines.push(`📅 Booking link sent`);
 
     await this.sendToOwnerChannels(tenantId, 'new_lead', lines.join('\n'), notifyConfig);
   }

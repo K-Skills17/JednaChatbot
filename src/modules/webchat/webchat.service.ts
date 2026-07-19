@@ -474,6 +474,14 @@ async function applySideEffects(
   if (action.extractedData?.name || action.extractedData?.nome)
     contactUpdate.name = action.extractedData.name ?? action.extractedData.nome;
   if (action.extractedData?.email) contactUpdate.email = action.extractedData.email;
+  // Phone comes in via qualificationData.phone — also promote to tags for easy filtering
+  if (action.extractedData?.phone) {
+    contactUpdate.tags = ['has_phone'];
+  }
+  // Record consent timestamp when prospect explicitly agrees to follow-up contact
+  if (action.extractedData?.consent_followup === true) {
+    contactUpdate.smsConsentAt = new Date();
+  }
   if (action.qualificationReasoning || action.extractedData) {
     const existing =
       ((await prisma.contact.findUnique({ where: { id: contactId }, select: { qualificationData: true } }))
@@ -507,6 +515,8 @@ async function applySideEffects(
       const notifName = updatedContext.extractedData?.name ?? updatedContext.extractedData?.nome ?? contactName;
       await notificationService.notifyNewLead(tenantId, notifName, 'web-demo', {
         email: updatedContext.extractedData?.email,
+        phone: updatedContext.extractedData?.phone,
+        practiceName: updatedContext.extractedData?.practice_name,
         problem: updatedContext.extractedData?.has_growth_problem,
       });
     }

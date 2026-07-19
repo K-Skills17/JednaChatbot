@@ -321,36 +321,43 @@ function buildQualifyingInstructions(aiConfig: TenantData['aiConfig']): string {
 
   return `## Current Phase: Discovery / Qualifying
 
-Your goal: qualify the prospect and collect their contact details before sending the booking link.
+Your goal: qualify the prospect, collect their contact details, then send the booking link.
 
-### Step-by-step flow (follow this order):
-1. Ask ONE qualifying question (decision maker / growth problem / open to call) — one at a time, max 2 questions
-2. Once you know they qualify, ask: "Before I send you the link — what's your name and best email? We'll use it to prep for the call."
-3. Once you have their name AND email, send the booking link immediately
+### Step-by-step flow (follow this order exactly):
+1. Ask ONE qualifying question — one at a time, max 2 qualifying questions total
+   - "Are you the owner or decision maker at your practice?"
+   - "What's the main thing you're trying to fix — is it reactivating old patients, new patient flow, or something else?"
+2. Once you know they qualify, ask in ONE message: "Quick question before I send you the link — what's your name and the name of your practice?"
+3. After they give name + practice: ask in ONE message: "And what's the best email and phone to reach you? We may send you a reminder or follow-up call before and after your Practice X-Ray. Reply YES to confirm you're OK with that, and share your info."
+4. Once they say YES (or any affirmative) AND give email + phone → send the booking link immediately
+   - If they decline follow-up contact: collect email only, skip phone, note consent_sms=false in qualification
 
 ### Qualification criteria:
 ${criteriaText}
 
 ### Rules:
-- ONE question per message, always
-- You MUST collect name and email before sending the booking link — no exceptions
+- ONE question or grouped ask per message — never more
+- You MUST collect name, practice name, email, and phone before sending the booking link
+- If they give email or phone in one message without the other, ask for the missing one before sending the link
 - Do NOT ask about pricing
-- Do NOT ask more than 2 qualifying questions before asking for name/email
 
 ### Booking link (use this EXACT URL — do NOT invent or modify it):
 ${bookingUrl}
 
-When sending the booking link (only after you have name + email):
+When sending the booking link (only after you have name + practice + email + phone):
 - Use the exact URL above — never substitute a different URL
-- Say something like: "Perfect, [name]! Here's the link to grab a time: ${bookingUrl} — just pick any slot and you'll get a Google Calendar confirmation at [email]."
-- Set action to "book"
-- Do NOT ask about specific dates or times — the link shows all available Mon-Fri slots automatically
+- Personalize it: "Perfect, [name]! Here's the link to grab a time for your Practice X-Ray: ${bookingUrl} — pick any slot and you'll get a Google Calendar confirmation at [email]."
+- Set action to "book", stage to "booking"
+- NEVER ask about specific dates or times — the link shows all available Mon-Fri slots
 
-Store everything in the qualification object:
+Store everything in the qualification object as you collect it:
 - name: their full name
+- practice_name: name of their dental practice
 - email: their email address
+- phone: their phone number (only if they consented)
+- consent_followup: true if they agreed to SMS/call follow-up, false if declined
 - is_decision_maker: true/false
-- has_growth_problem: what specific problem they described
+- has_growth_problem: the specific problem they described
 - open_to_call: true/false
 - us_based: true/false`;
 }
@@ -424,6 +431,9 @@ You MUST always respond with a valid JSON object in EXACTLY this format:
   "qualification": {
     "name": "<prospect's full name or null>",
     "email": "<prospect's email address or null>",
+    "phone": "<prospect's phone number or null>",
+    "practice_name": "<name of their dental practice or null>",
+    "consent_followup": <true if they agreed to receive follow-up SMS/calls, false if declined, null if not asked>,
     "is_decision_maker": <true|false|null>,
     "has_growth_problem": "<specific problem they described or null>",
     "open_to_call": <true|false|null>,
