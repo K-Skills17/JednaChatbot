@@ -198,7 +198,9 @@ export async function processWebMessage(
 
   // Parse AI response via concierge envelope (same as WhatsApp engine)
   const envelope = parseEnvelope(aiResponse.text);
-  const replyText = envelope.reply;
+  // Substitute any {{PLACEHOLDER}} tokens the AI echoed back (e.g. {{CALENDLY_URL}})
+  const bookingUrl = aiConfig.calendlyUrl ?? aiConfig.bookingUrl ?? env.CALENDLY_URL ?? '';
+  const replyText = envelope.reply.replace(/\{\{CALENDLY_URL\}\}/g, bookingUrl);
 
   // Map envelope to AiAction for side effects
   const aiAction: AiAction = {

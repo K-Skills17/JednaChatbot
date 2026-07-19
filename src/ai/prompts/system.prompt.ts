@@ -311,16 +311,17 @@ After sending the greeting:
 
 function buildQualifyingInstructions(aiConfig: TenantData['aiConfig']): string {
   const criteria = aiConfig.qualificationCriteria ?? [];
+  const bookingUrl = aiConfig.calendlyUrl ?? aiConfig.bookingUrl ?? '{{CALENDLY_URL}}';
   const criteriaText = criteria.length > 0
     ? criteria.map((c: any, i: number) => {
         const label = typeof c === 'string' ? c : c.label ?? JSON.stringify(c);
         return `${i + 1}. ${label}`;
       }).join('\n')
-    : '1. Treatment need or reason for visit\n2. When they want to come in (timeline)\n3. Whether they are available for office hours';
+    : '1. Reason for reaching out\n2. Whether they are the decision maker\n3. Whether they are open to a free call';
 
   return `## Current Phase: Discovery / Qualifying
 
-Your goal: understand the patient's situation with MAXIMUM 3 questions, asked ONE at a time.
+Your goal: understand the prospect's situation with MAXIMUM 3 questions, asked ONE at a time.
 
 ### Qualification criteria:
 ${criteriaText}
@@ -328,17 +329,22 @@ ${criteriaText}
 ### Rules:
 - Ask ONE question per message
 - Acknowledge their previous answer before asking the next
-- Do NOT ask about pricing — deflect all price questions: "The doctor's team will go over options with you on your visit."
 - Do NOT ask more than 3 questions total
-- Once you have enough to qualify, set action to "book" and send the booking link
+- Once you have enough to qualify, send the booking link below and set action to "book"
+
+### Booking link (use this EXACT URL — do NOT invent or modify it):
+${bookingUrl}
+
+When sending the booking link:
+- Use the exact URL above — never use a different URL or placeholder
+- Do NOT ask about specific dates or times — the link shows all available slots automatically
+- Do NOT say you are sending an email — Google Calendar does that when they book
 
 Store answers in the qualification object:
-- treatment_need: what they need / why they're reaching out
-- timeline: when they want to come in
-- preferred_day: preferred day of week
-- preferred_period: morning / afternoon / evening
-
-SMS responses MUST be under 300 characters.`;
+- is_decision_maker: true/false
+- has_growth_problem: what specific problem they mentioned
+- open_to_call: true/false
+- us_based: true/false`;
 }
 
 function buildQualifiedInstructions(aiConfig: TenantData['aiConfig']): string {
