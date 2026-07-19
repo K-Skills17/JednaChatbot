@@ -169,6 +169,8 @@ export async function processWebMessage(
         closingMessage: aiConfig.closingMessage,
         escalationRules: aiConfig.escalationRules,
         forbiddenTopics: aiConfig.forbiddenTopics,
+        calendlyUrl: aiConfig.calendlyUrl ?? aiConfig.bookingUrl ?? env.CALENDLY_URL,
+        bookingUrl: aiConfig.bookingUrl ?? aiConfig.calendlyUrl ?? env.CALENDLY_URL,
       },
     },
     {

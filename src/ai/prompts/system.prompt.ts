@@ -38,6 +38,8 @@ interface TenantData {
     urgency?: string;
     leadMagnet?: string;
     referralIncentive?: string;
+    calendlyUrl?: string;
+    bookingUrl?: string;
   };
 }
 
@@ -287,7 +289,8 @@ CRITICAL RULES:
 If they ask about services, answer briefly and return to scheduling.
 If they push back, ask one open question: "What would make it easier to come in?" — then address that.
 
-SMS responses MUST be under 300 characters. Use the booking link: {{CALENDLY_URL}}`;
+SMS responses MUST be under 300 characters. Use the booking link: ${aiConfig.calendlyUrl ?? aiConfig.bookingUrl ?? '{{CALENDLY_URL}}'}
+NEVER say you are sending a confirmation email. Google Calendar handles that automatically when they book.`;
 }
 
 function buildGreetingInstructions(aiConfig: TenantData['aiConfig']): string {
@@ -341,13 +344,22 @@ SMS responses MUST be under 300 characters.`;
 function buildQualifiedInstructions(aiConfig: TenantData['aiConfig']): string {
   const urgency = aiConfig.urgency ?? '';
   const scarcity = aiConfig.scarcity ?? '';
+  const bookingUrl = aiConfig.calendlyUrl ?? aiConfig.bookingUrl ?? '{{CALENDLY_URL}}';
 
   return `## Current Phase: Qualified — Send Booking Link
 
-This patient is ready to book. Your ONLY job now is to send them the booking link.
+This prospect is ready to book. Your ONLY job now is to send them the booking link.
 
-Message template (adapt, keep under 300 chars):
-"Great! Here's the link to book your appointment at a time that works for you: {{CALENDLY_URL}} — takes 2 minutes."
+Booking link: ${bookingUrl}
+
+Message template (adapt naturally):
+"[Brief positive acknowledgment]. Here's the link to book your free call — just pick any slot that works for you: ${bookingUrl}"
+
+CRITICAL BOOKING RULES:
+- NEVER ask about specific dates or times — the booking page shows all available slots automatically.
+- NEVER say you are sending them an email or confirmation — Google Calendar sends that automatically when they book on the link.
+- Do NOT negotiate availability in chat. All scheduling happens on the link.
+- If they ask when you're available: say "The calendar link shows all available times — just pick any slot that works."
 
 ${urgency ? `Urgency note: "${urgency}"` : ''}
 ${scarcity ? `Availability note: "${scarcity}"` : ''}
@@ -356,15 +368,21 @@ Set action to "book". Set stage to "booking".`;
 }
 
 function buildBookingInstructions(aiConfig: TenantData['aiConfig']): string {
-  return `## Current Phase: Booking Confirmation
+  const bookingUrl = aiConfig.calendlyUrl ?? aiConfig.bookingUrl ?? '{{CALENDLY_URL}}';
 
-The patient has expressed intent to book or received the booking link.
+  return `## Current Phase: After Booking Link Sent
 
-- If they confirm they booked: congratulate them, let them know the team looks forward to seeing them, and set action to "continue", stage to "closing"
-- If they haven't clicked the link yet: gently follow up once, then set action to "handoff" so a human can assist
-- If they have a question about the appointment: answer if you know, otherwise set action to "handoff"
+The prospect has received the booking link: ${bookingUrl}
 
-Always keep replies under 300 characters.`;
+Rules:
+- If they say they booked / picked a slot: congratulate them briefly ("Looking forward to talking with you!"), set action to "continue", stage to "closing". Tell them they will receive a Google Calendar confirmation to their email automatically.
+- If they haven't booked yet: encourage them to click the link. Remind them it takes under 2 minutes and shows all available slots.
+- If they ask when slots are available: say slots update in real time on the link — we're available Monday through Friday.
+- If they have a question about the call: answer briefly, then return to the link.
+- NEVER say you are sending them an email, confirmation, or link from your end — all of that is handled automatically by Google Calendar when they book.
+- NEVER negotiate specific dates or times in chat.
+
+Always keep replies concise.`;
 }
 
 function buildClosedInstructions(aiConfig: TenantData['aiConfig']): string {

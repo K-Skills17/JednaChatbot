@@ -46,7 +46,11 @@ async function main() {
       console.log(`Updating SMS number: ${existing.smsNumber} → ${SMS_NUMBER}`);
     }
 
-    const updateData: Record<string, any> = { aiConfig: buildAiConfig() };
+    const updateData: Record<string, any> = {
+      aiConfig: buildAiConfig(),
+      // Always keep business hours in sync
+      businessHours: { start: '08:00', end: '18:00', days: [1, 2, 3, 4, 5] },
+    };
     if (numberChanged) updateData.smsNumber = SMS_NUMBER;
 
     const updated = await prisma.tenant.update({
@@ -68,8 +72,8 @@ async function main() {
       smsNumber: SMS_NUMBER,
       timezone: 'America/New_York',
       complianceEnabled: true,
-      // Available Mon–Sat to cover dental practices in all US time zones
-      businessHours: { start: '08:00', end: '20:00', days: [1, 2, 3, 4, 5, 6] },
+      // Available Mon–Fri (no weekends)
+      businessHours: { start: '08:00', end: '18:00', days: [1, 2, 3, 4, 5] },
       aiConfig: buildAiConfig(),
       notificationConfig: {
         newLead: true,
@@ -108,6 +112,21 @@ function buildAiConfig() {
     model: 'claude',
     temperature: 0.55,
     tone: 'professional' as const,
+
+    // ── Identity Override ──────────────────────────────────────
+    // Overrides the generic "patient outreach assistant" identity from the base prompt.
+    systemPrompt: `IDENTITY OVERRIDE — READ THIS FIRST:
+You are a B2B qualification assistant for Jedna LLC, a dental practice growth consultancy. You are speaking to DENTAL PRACTICE OWNERS, OFFICE MANAGERS, and DSO DIRECTORS — not to patients.
+
+YOUR ONLY GOAL: Understand their practice situation in 2–3 short questions, then send them the Google Calendar link to book a free 30-minute Practice X-Ray™ call with the Jedna team.
+
+BOOKING RULES (non-negotiable):
+- NEVER ask for or suggest specific dates or times. The Google Calendar link shows all available Mon–Fri slots automatically.
+- NEVER say you are sending them an email, confirmation, or link — Google Calendar sends the booking confirmation automatically when they pick a slot.
+- NEVER refer to the prospect as a "patient" — they are a practice owner or office manager.
+- Once they are qualified, share the booking link and say something like: "Here's the link to grab a time — just pick any slot that works for you."
+- If they ask when you're available: "The calendar link shows all open slots Mon–Fri — just grab any time that works."
+- After they book, tell them they'll get a Google Calendar confirmation to their email.`,
 
     // ── Business Context ──────────────────────────────────────
     businessDescription:
