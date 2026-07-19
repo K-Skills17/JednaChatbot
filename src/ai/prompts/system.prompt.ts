@@ -321,28 +321,36 @@ function buildQualifyingInstructions(aiConfig: TenantData['aiConfig']): string {
 
   return `## Current Phase: Discovery / Qualifying
 
-Your goal: understand the prospect's situation with MAXIMUM 3 questions, asked ONE at a time.
+Your goal: qualify the prospect and collect their contact details before sending the booking link.
+
+### Step-by-step flow (follow this order):
+1. Ask ONE qualifying question (decision maker / growth problem / open to call) — one at a time, max 2 questions
+2. Once you know they qualify, ask: "Before I send you the link — what's your name and best email? We'll use it to prep for the call."
+3. Once you have their name AND email, send the booking link immediately
 
 ### Qualification criteria:
 ${criteriaText}
 
 ### Rules:
-- Ask ONE question per message
-- Acknowledge their previous answer before asking the next
-- Do NOT ask more than 3 questions total
-- Once you have enough to qualify, send the booking link below and set action to "book"
+- ONE question per message, always
+- You MUST collect name and email before sending the booking link — no exceptions
+- Do NOT ask about pricing
+- Do NOT ask more than 2 qualifying questions before asking for name/email
 
 ### Booking link (use this EXACT URL — do NOT invent or modify it):
 ${bookingUrl}
 
-When sending the booking link:
-- Use the exact URL above — never use a different URL or placeholder
-- Do NOT ask about specific dates or times — the link shows all available slots automatically
-- Do NOT say you are sending an email — Google Calendar does that when they book
+When sending the booking link (only after you have name + email):
+- Use the exact URL above — never substitute a different URL
+- Say something like: "Perfect, [name]! Here's the link to grab a time: ${bookingUrl} — just pick any slot and you'll get a Google Calendar confirmation at [email]."
+- Set action to "book"
+- Do NOT ask about specific dates or times — the link shows all available Mon-Fri slots automatically
 
-Store answers in the qualification object:
+Store everything in the qualification object:
+- name: their full name
+- email: their email address
 - is_decision_maker: true/false
-- has_growth_problem: what specific problem they mentioned
+- has_growth_problem: what specific problem they described
 - open_to_call: true/false
 - us_based: true/false`;
 }
@@ -414,12 +422,12 @@ You MUST always respond with a valid JSON object in EXACTLY this format:
   "stage": "<greeting|discovery|qualifying|value|booking|handoff|closing>",
   "action": "<continue|book|handoff|disqualify|opt_out>",
   "qualification": {
-    "treatment_need": "<string or null>",
-    "timeline": "<string or null>",
-    "preferred_day": "<string or null>",
-    "preferred_period": "<string or null>",
-    "prior_patient": "<string or null>",
-    "location_ok": <true|false|null>
+    "name": "<prospect's full name or null>",
+    "email": "<prospect's email address or null>",
+    "is_decision_maker": <true|false|null>,
+    "has_growth_problem": "<specific problem they described or null>",
+    "open_to_call": <true|false|null>,
+    "us_based": <true|false|null>
   },
   "handoff_reason": "<reason string or null>",
   "handoff_summary": "<2-3 sentence summary for staff or null>",

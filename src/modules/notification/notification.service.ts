@@ -43,15 +43,25 @@ export class NotificationService {
   }
 
   /** Send notifications for a new lead event */
-  async notifyNewLead(tenantId: string, contactName: string, phone: string): Promise<void> {
+  async notifyNewLead(
+    tenantId: string,
+    contactName: string,
+    phone: string,
+    extra?: { email?: string; problem?: string },
+  ): Promise<void> {
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) return;
 
     const notifyConfig = getNotifyConfig(tenant);
     if (!notifyConfig?.newLead) return;
 
-    const content = `New lead: ${contactName || phone}\nPhone: ${phone}`;
-    await this.sendToOwnerChannels(tenantId, 'new_lead', content, notifyConfig);
+    const lines = [`🔔 New web lead: ${contactName || 'Unknown'}`];
+    if (extra?.email) lines.push(`📧 Email: ${extra.email}`);
+    if (phone && !phone.startsWith('web-')) lines.push(`📱 Phone: ${phone}`);
+    if (extra?.problem) lines.push(`💬 Problem: ${extra.problem}`);
+    lines.push(`📅 Sent booking link`);
+
+    await this.sendToOwnerChannels(tenantId, 'new_lead', lines.join('\n'), notifyConfig);
   }
 
   /** Send notifications for a booking event */

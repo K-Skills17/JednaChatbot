@@ -471,7 +471,8 @@ async function applySideEffects(
   const contactUpdate: Record<string, any> = {};
   if (action.leadScore != null) contactUpdate.leadScore = action.leadScore;
   if (action.leadStatus) contactUpdate.leadStatus = action.leadStatus;
-  if (action.extractedData?.nome) contactUpdate.name = action.extractedData.nome;
+  if (action.extractedData?.name || action.extractedData?.nome)
+    contactUpdate.name = action.extractedData.name ?? action.extractedData.nome;
   if (action.extractedData?.email) contactUpdate.email = action.extractedData.email;
   if (action.qualificationReasoning || action.extractedData) {
     const existing =
@@ -490,7 +491,7 @@ async function applySideEffects(
 
   // Notifications
   try {
-    const contactName = action.extractedData?.nome ?? action.extractedData?.name ?? '';
+    const contactName = action.extractedData?.name ?? action.extractedData?.nome ?? '';
     if (action.shouldEscalate) {
       await notificationService.notifyEscalation(
         tenantId,
@@ -500,8 +501,14 @@ async function applySideEffects(
         { extractedData: updatedContext.extractedData, messageCount: updatedContext.messageCount },
       );
     }
-    if (action.leadStatus === 'qualified' && currentContext.messageCount <= 2) {
-      await notificationService.notifyNewLead(tenantId, contactName, 'web-demo');
+    // Notify when booking link is sent (stage = booking) — by then we have name + email
+    const bookingLinkSent = action.nextState === 'booking' || action.leadStatus === 'booked';
+    if (bookingLinkSent || (action.leadStatus === 'qualified' && currentContext.messageCount <= 2)) {
+      const notifName = updatedContext.extractedData?.name ?? updatedContext.extractedData?.nome ?? contactName;
+      await notificationService.notifyNewLead(tenantId, notifName, 'web-demo', {
+        email: updatedContext.extractedData?.email,
+        problem: updatedContext.extractedData?.has_growth_problem,
+      });
     }
   } catch (err) {
     logger.error({ err }, 'Failed to send notification for web chat');
